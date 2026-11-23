@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lamina · tests</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; color: #111; background: #fff; }
+  table { border-collapse: collapse; margin-bottom: 18px; } td, th { border-bottom: 1px solid #ddd; padding: 4px 10px; text-align: left; }
+  .ok { color: #1f7a4d; font-weight: 700; } .ko { color: #c62f29; font-weight: 700; } h2 { margin-top: 28px; }
+</style>
+</head>
+<body>
+<h1>Lamina — tests</h1>
+<p>Moteur comparé aux classeurs d'origine (valeurs non concernées par les corrections), aux formules fermées de la RDM et aux cas limites du feuilleté.</p>
+<div id="sum"></div>
+<div id="out"></div>
+<script src="js/glass.js?v=6801ec08"></script>
+<script src="js/roark-calc.js?v=69a21d1c"></script>
+<script src="js/audit.js?v=81589e04"></script>
+<script>
+(function () {
+  const C = LaminaRoark, GL = LaminaGlass, AU = LaminaAudit;
+  const rows = []; let fails = 0, n = 0;
+  function check(name, got, exp, tol = 1e-4) {
+    const ok = Math.abs(got - exp) <= tol * Math.max(1e-9, Math.abs(exp)) || (exp === 0 && Math.abs(got) < 1e-9);
+    n++; if (!ok) fails++;
+    rows.push(`<tr><td>${name}</td><td>${Number(got).toPrecision(7)}</td><td>${Number(exp).toPrecision(7)}</td><td class="${ok ? 'ok' : 'ko'}">${ok ? 'OK' : 'ÉCART'}</td></tr>`);
+  }
+  const title = (t) => rows.push(`<tr><th colspan="4" style="padding-top:14px">${t}</th></tr>`);
+
+  // ------------------------------------------------------------------
+  title('A · Classeur « Glass behaviour under different restraints » — données par défaut (portée 3 000, largeur 1 500, t = 16, d1 = 40)');
+  const cmp = AU.compare();
+  cmp.rows.forEach((r) => {
+    const nm = `${r.bc} / ${r.load}`;
+    if (r.bc === 'cant' && r.load === 'uni') {
+      check(`${nm} : σ corrigée = 6·(q·L²/2)/t² (classeur ${r.s.toFixed(1)} MPa, erreur R28)`, r.ls, 6 * (5e-3 * 3000 ** 2 / 2) / 256);
+      check(`${nm} : σ classeur = σ corrigée × b/a`, r.ls * 1500 / 3000, r.s);
+    } else if (r.bc === 'fs' && r.load !== 'uni') {
+      check(`${nm} : σ d'encastrement`, r.mA, r.s);
+      check(`${nm} : flèche sous la charge`, r.lyLoad, r.y, 1e-4);
+    } else check(`${nm} : σ`, r.ls, r.s);
+    if (!(r.bc === 'fs')) check(`${nm} : y_max`, r.ly, r.y);
+  });
+  const fsu = cmp.rows.find((r) => r.bc === 'fs' && r.load === 'uni');
+  check('fs / uni : y_max (classeur 1/185, exact 1/184,6 — tolérance 0,3 %)', fsu.ly, fsu.y, 3e-3);
+  check('4 appuis simples, a/b = 2 : σ (D25)', cmp.plate.ls, cmp.plate.s);
+  check('4 appuis simples, a/b = 2 : y (D26)', cmp.plate.ly, cmp.plate.y);
+
+  // ------------------------------------------------------------------
+  title('B · Poutre de largeur unité — formules fermées (L = 2 000, D′ = 1e9 N·mm, w = 0,002 N/mm², P = 3 N/mm)');
+  const L = 2000, Dp = 1e9, w = 0.002, P = 3;
+  let B = C.beam('ss', L, w, 0, 0, Dp);
+  check('ss, w : y_max = 5wL⁴/384D', B.ymax.v, 5 * w * L ** 4 / (384 * Dp)); check('ss, w : m_max = wL²/8', B.mpos.v, w * L * L / 8);
+  B = C.beam('ss', L, 0, P, L / 2, Dp); check('ss, P milieu : y = PL³/48D', B.ymax.v, P * L ** 3 / (48 * Dp));
+  B = C.beam('ss', L, 0, P, 500, Dp); const cc = 500; check('ss, P à L/4 : y_max = P·c·(L²−c²)^1,5/(9√3·L·D)', B.ymax.v, P * cc * (L * L - cc * cc) ** 1.5 / (9 * Math.sqrt(3) * L * Dp), 1e-5);
+  B = C.beam('ff', L, w, 0, 0, Dp); check('ff, w : y_max = wL⁴/384D', B.ymax.v, w * L ** 4 / (384 * Dp)); check('ff, w : m_A = −wL²/12', B.MA, -w * L * L / 12); check('ff, w : m travée = wL²/24', B.mpos.v, w * L * L / 24);
+  B = C.beam('ff', L, 0, P, L / 2, Dp); check('ff, P milieu : y = PL³/192D', B.ymax.v, P * L ** 3 / (192 * Dp)); check('ff, P milieu : m = PL/8', B.mpos.v, P * L / 8);
+  B = C.beam('fs', L, w, 0, 0, Dp); const xi = (1 + Math.sqrt(33)) / 16;
+  check('fs, w : m_A = −wL²/8', B.MA, -w * L * L / 8); check('fs, w : m travée = 9wL²/128', B.mpos.v, 9 * w * L * L / 128, 1e-5);
+  check('fs, w : y_max = wL⁴·ξ(1−3ξ²+2ξ³)/48D, ξ = (1+√33)/16', B.ymax.v, w * L ** 4 * xi * (1 - 3 * xi * xi + 2 * xi ** 3) / (48 * Dp), 1e-5);
+  B = C.beam('fs', L, 0, P, L / 2, Dp); check('fs, P milieu : y_max = PL³/(48√5·D)', B.ymax.v, P * L ** 3 / (48 * Math.sqrt(5) * Dp), 1e-5); check('fs, P milieu : m_A = −3PL/16', B.MA, -3 * P * L / 16); check('fs, P milieu : m sous P = 5PL/32', B.mpos.v, 5 * P * L / 32);
+  B = C.beam('fs', L, 0, P, 1800, Dp); check('fs, P à 0,9 L : m sous la charge > |m_A| (anomalie du classeur)', B.mpos.v / Math.abs(B.MA), (1800 ** 2 * 200 * (3 * L - 1800) / (2 * L ** 3)) / (1800 * 200 * (L + 200) / (2 * L * L)));
+  B = C.beam('cant', L, 0, P, L, Dp); check('console, P en bout : y = PL³/3D', B.ymax.v, P * L ** 3 / (3 * Dp)); check('console, P en bout : m_A = −PL', B.MA, -P * L);
+  B = C.beam('cant', L, w, 0, 0, Dp); check('console, w : y = wL⁴/8D', B.ymax.v, w * L ** 4 / (8 * Dp)); check('console, w : m_A = −wL²/2', B.MA, -w * L * L / 2);
+
+  // ------------------------------------------------------------------
+  title('C · Classeur « Effective Thickness - prEN16612 » — 5 plis de 8 mm, intercalaire 1,52 mm, ω = 0,7');
+  const e = GL.effective([8, 8, 8, 8, 8], 1.52, 0.7);
+  check('h_ef;w (F25)', e.hw, 39.887942370336241);
+  [42.793049202159779, 54.549074239395622, 89.067129739315178, 54.549074239395615, 42.793049202159779].forEach((v, k) => check(`h_ef;σ pli ${k + 1} (F${26 + k})`, e.hs[k], v));
+  const e0 = GL.effective([8, 10], 1.52, 0), e1 = GL.effective([8, 10], 0, 1);
+  check('ω = 0 : h_ef;w = (Σh³)^(1/3)', e0.hw, Math.cbrt(8 ** 3 + 10 ** 3)); check('ω = 0 : h_ef;σ,1 = √(Σh³/h₁)', e0.hs[0], Math.sqrt((8 ** 3 + 10 ** 3) / 8));
+  check('ω = 1, sans intercalaire : h_ef;w = Σh', e1.hw, 18); check('ω = 1, sans intercalaire : h_ef;σ = Σh', e1.hs[1], 18);
+  const as = AU.asym(); check('2 plis 8/12 : axe neutre au centre de gravité (h_m,1 = h_s·h₂/(h₁+h₂))', as.e.hm[0], (0.5 * (8 + 12) + 1.52) * 12 / 20);
+
+  // ------------------------------------------------------------------
+  title('D · « Glass Strength Spreadsheet » (prEN 16612) — 50 ans, float, durci, trempe horizontale');
+  check('k_mod 50 ans (D16)', GL.kmodOf(438000), 0.29438887674662917);
+  const res = { surface: 'float', fgk: 45, gMA: 1.8, gMv: 1.2, ke: 1, kv: 1 };
+  check('f_g;d durci (D34)', GL.fgd(res, 'durci', GL.kmodOf(438000)).v, 28.193055251999063);
+  check('k_mod 10 min = 0,74', GL.kmodOf(10 / 60), 0.663 * Math.pow(1 / 6, -1 / 16));
+  check('f_g;d trempé, vent 10 min', GL.fgd(res, 'trempe', GL.kmodOf(10 / 60)).v, GL.kmodOf(10 / 60) * 45 / 1.8 + 75 / 1.2);
+  check('f_g;d recuit, imprimé (k_sp = 0,75), 50 ans', GL.fgd(Object.assign({}, res, { surface: 'imprime' }), 'recuit', GL.kmodOf(438000)).v, 0.29438887674662917 * 0.75 * 45 / 1.8);
+  check('k_mod borné à 1 (3 s)', GL.kmodOf(3 / 3600), 1);
+
+  // ------------------------------------------------------------------
+  title('E · Calcul complet');
+  const s0 = C.defaultState(); const R0 = C.compute(s0);
+  check('état par défaut valide', R0.valid ? 1 : 0, 1);
+  const sm = C.defaultState(); sm.comp.mode = 'mono'; sm.comp.t = 18;
+  const sl = C.defaultState(); sl.comp = { mode: 'feuillete', plies: [{ h: 8, temper: 'trempe' }, { h: 10, temper: 'trempe' }], hint: 0, w: 1 };
+  const Rm = C.compute(sm), Rl = C.compute(sl);
+  check('feuilleté ω = 1 sans intercalaire ≡ monolithique Σh : σ', Rl.ulsCases[0].gov.s.v, Rm.ulsCases[0].gov.s.v);
+  check('feuilleté ω = 1 sans intercalaire ≡ monolithique Σh : flèche', Rl.slsCases[0].y.v, Rm.slsCases[0].y.v);
+  const sc = C.defaultState(); sc.cas = 's-cant'; sc.load = 'line'; sc.comp = { mode: 'mono', t: 15, temper: 'trempe' }; sc.a = 1000; sc.b = 1100; sc.uls[0].p = 1.5; sc.pos.d = '';
+  const Rc = C.compute(sc);
+  check('garde-corps console 1,1 m, 1,5 kN/m en tête : σ = 6·p·b/t²', Math.abs(Rc.ulsCases[0].gov.s.v), 6 * 1.5 * 1100 / 225);
+  const sp = C.defaultState(); sp.cas = 's-ss'; sp.load = 'point'; sp.comp = { mode: 'mono', t: 12, temper: 'trempe' }; sp.a = 1200; sp.b = 2000; sp.uls[0].W = 1; sp.pos.beff = 600;
+  const Rp = C.compute(sp);
+  check('bande, P = 1 kN au milieu sur b_eff = 600 : σ = 6·(P/b_eff)·L/4/t²', Rp.ulsCases[0].gov.s.v, 6 * (1000 / 600) * 2000 / 4 / 144);
+
+  document.getElementById('sum').innerHTML = `<p class="${fails ? 'ko' : 'ok'}">${n - fails} / ${n} tests réussis</p>`;
+  document.getElementById('out').innerHTML = `<table><thead><tr><th>Test</th><th>Calculé</th><th>Attendu</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  window.LAMINA_TESTS = { n, fails };
+})();
+</script>
+</body>
+</html>
