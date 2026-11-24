@@ -27,6 +27,7 @@
   const blockHead = (n, t, p) => `<div class="block-head"><span class="num">${n}</span><h2>${t}</h2><p>${p || ''}</p></div>`;
   const chips = (act, cur, opts) => `<div class="chips">${opts.map((o) => `<button type="button" class="chip${o[0] === cur ? ' on' : ''}" data-qact="${act}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
   const tempers = () => GL.TEMPERS.map((x) => [x.id, x.label]);
+  const R0group = (c) => c.group !== '4 côtés';   // la limite FD § 10.5.2 dépend du type de vitrage (simple ou isolant)
 
   function init(database) { db = database; st = db.draft_vitrage ? C.upgrade(db.draft_vitrage) : C.defaultState(); dirty = !!db.draftDirty_vitrage; }
   function flush(dbx) { dbx.draft_vitrage = st; dbx.draftDirty_vitrage = dirty; }
@@ -94,7 +95,7 @@
       if (i < G.plies.length - 1) { const hi = hint * k; o += `<rect x="${x0}" y="${y - hi}" width="${x1 - x0}" height="${hi}" fill="${ACC}" opacity=".55"/>`; y -= hi; }
     });
     if (!G.mono) { const yn = H - 14 - G.eff.z0 * k; o += `<line x1="${x0 - 4}" y1="${yn}" x2="${x1 + 4}" y2="${yn}" stroke="${RED}" stroke-width="1" stroke-dasharray="4 3"/>`; }
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin-top:10px" font-family="Inter, sans-serif">${o}</svg>${G.mono ? '' : `<p class="cap">${sub('Coupe dilatée (pli 1 en face inférieure) ; tireté rouge : axe neutre du feuilleté (centre de gravité du verre), distances h_m,k mesurées depuis cet axe.')}</p>`}`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin-top:10px" font-family="Inter, sans-serif">${o}</svg>${G.mono ? '' : `<p class="cap">${sub('Coupe dilatée (pli 1 en face inférieure) ; tireté rouge : plan de référence des distances h_m,k (' + (R.comp.eff.ref === 'cg' ? 'centre de gravité du verre' : 'plan de symétrie du feuilleté') + ').')}</p>`}`;
   }
   // élévation d'une bande : appuis, charge, moment (ELU) et déformée (ELS)
   function elevation(R, s, W = 520) {
@@ -140,7 +141,8 @@
     const ulsRows = st.uls.map((x, i) => `<tr><td><input type="text" data-qp="uls.${i}.name" value="${esc(x.name)}" style="min-width:130px;text-align:left"></td><td><input type="number" step="any" data-qp="uls.${i}.${key}" value="${esc(x[key])}"></td>
       ${adm ? '' : `<td>${sel(`uls.${i}.dur`, durOpts, { rr: true, style: 'min-width:150px' })}</td><td>${x.dur === 'autre' ? `<input type="number" step="any" data-qp="uls.${i}.hrs" value="${esc(x.hrs)}" placeholder="heures">` : ''}</td><td class="ro" id="qKm${i}"></td>`}
       <td class="ro" id="qFd${i}"></td><td class="ro" id="qSg${i}"></td><td class="ro" id="qUr${i}"></td><td>${st.uls.length > 1 ? `<button class="btn sm ghost" data-qact="delUls" data-i="${i}" title="Supprimer ce cas">✕</button>` : ''}</td></tr>`).join('');
-    const slsRows = st.sls.map((x, i) => `<tr><td><input type="text" data-qp="sls.${i}.name" value="${esc(x.name)}" style="min-width:130px;text-align:left"></td><td><input type="number" step="any" data-qp="sls.${i}.${key}" value="${esc(x[key])}"></td><td><input type="number" step="any" data-qp="sls.${i}.lim" value="${esc(x.lim)}" placeholder="ex. 150"></td><td><input type="number" step="any" data-qp="sls.${i}.max" value="${esc(x.max)}" placeholder="—"></td><td class="ro" id="qSlsY${i}"></td><td class="ro" id="qSlsR${i}"></td><td>${st.sls.length > 1 ? `<button class="btn sm ghost" data-qact="delSls" data-i="${i}" title="Supprimer ce cas">✕</button>` : ''}</td></tr>`).join('');
+    const fdc = st.slsCrit === 'fd', FDd = C.fdDefl(c, +st.a || 0, +st.b || 0, !!st.igu);
+    const slsRows = st.sls.map((x, i) => `<tr><td><input type="text" data-qp="sls.${i}.name" value="${esc(x.name)}" style="min-width:130px;text-align:left"></td><td><input type="number" step="any" data-qp="sls.${i}.${key}" value="${esc(x[key])}"></td><td>${fdc ? `<input type="number" value="${FDd.lim}" disabled>` : `<input type="number" step="any" data-qp="sls.${i}.lim" value="${esc(x.lim)}" placeholder="ex. 150">`}</td><td>${fdc ? `<input type="number" value="${FDd.max}" disabled>` : `<input type="number" step="any" data-qp="sls.${i}.max" value="${esc(x.max)}" placeholder="—">`}</td><td class="ro" id="qSlsY${i}"></td><td class="ro" id="qSlsR${i}"></td><td>${st.sls.length > 1 ? `<button class="btn sm ghost" data-qact="delSls" data-i="${i}" title="Supprimer ce cas">✕</button>` : ''}</td></tr>`).join('');
     const lbA = c.strip ? 'Largeur a' : 'Côté a', lbB = c.strip ? (c.bc === 'cant' ? 'Porte-à-faux b' : 'Portée b') : 'Côté b';
     app.innerHTML = `<div class="page">
       <div class="actionbar">
@@ -155,21 +157,21 @@
       <div class="cols2"><div>
         <div class="fields">${field('Repère', inp('name', { type: 'text', ph: 'ex. Verrière V1' }))}</div>
         <p class="muted" style="font-size:12.5px;margin:4px 0 8px">${esc(c.ab)}</p>
-        <div class="fields">${field(lbA, inp('a'), 'mm')}${field(lbB, inp('b'), 'mm')}${field('Module E', inp('mat.E'), 'MPa')}${field('Coefficient de Poisson ν', inp('mat.nu'))}</div>
+        <div class="fields">${field(lbA, inp('a'), 'mm')}${field(lbB, inp('b'), 'mm')}${field('Module E', inp('mat.E'), 'MPa')}${field('Coefficient de Poisson ν', inp('mat.nu'), '', 'FD P78-468 § 6 : 0,23')}</div>
         <div class="sub-title">Composition</div>
         ${chips('comp', st.comp.mode, [['mono', 'Monolithique'], ['feuillete', 'Feuilleté']])}
         ${lam ? `<div class="tbl-wrap" style="margin-top:12px"><table class="grid"><thead><tr><th class="rowh">Pli</th><th>h [mm]</th><th>Traitement</th><th>h<sub>ef;σ</sub> [mm]</th><th></th></tr></thead><tbody>${plyRows}</tbody></table></div>
           <div style="margin:8px 0 12px"><button class="btn sm" data-qact="addPly" title="Ajouter un pli">+ pli</button></div>
-          <div class="fields">${field('Intercalaire', inp('comp.hint'), 'mm', 'épaisseur de chaque intercalaire')}${field('Transfert de cisaillement ω', inp('comp.w'), '', '0 : plis indépendants · 1 : monolithique (EN 16613 / ETE de l’intercalaire, selon durée et température)')}</div>
+          <div class="fields">${field('Intercalaire', inp('comp.hint'), 'mm', 'épaisseur de chaque intercalaire')}${field('Transfert de cisaillement ω', inp('comp.w'), '', '0 : plis indépendants · 1 : monolithique ; valeurs par cas de charge dans l’onglet Épaisseur équivalente')}${field('Plan de référence h<sub>m</sub>', sel('comp.ref', [['geo', 'Plan de symétrie (EN 16612)'], ['cg', 'Centre de gravité du verre']]))}</div>
           <p class="muted" style="font-size:12.5px;margin-top:8px" id="qHw"></p>`
         : `<div class="fields" style="margin-top:12px">${field('Épaisseur t', inp('comp.t'), 'mm', 'épaisseur de calcul (min. EN 572 si besoin)')}${field('Traitement', sel('comp.temper', tempers()))}</div>`}
         ${c.strip ? `<div style="margin-top:14px">${chk('cyl', 'Rigidité de plaque en flexion cylindrique D′ = E·t³/12(1 − ν²) (sinon poutre : D′ = E·t³/12, comme le classeur)')}</div>` : ''}
       </div>
       <div><div class="fig" id="qFig"></div><div id="qSec"></div></div></div>
-      ${blockHead('03', 'Résistance du verre', adm ? 'Contrainte admissible saisie, comparée à la contrainte maximale de calcul.' : 'NF EN 16612 : f<sub>g;d</sub> = k<sub>e</sub>·k<sub>mod</sub>·k<sub>sp</sub>·f<sub>g;k</sub>/γ<sub>M;A</sub> + k<sub>v</sub>·(f<sub>b;k</sub> − f<sub>g;k</sub>)/γ<sub>M;v</sub>, k<sub>mod</sub> = 0,663·t<sup>−1/16</sup> (t en heures) selon la durée de chaque cas ELU.')}
-      ${chips('res', st.res.mode, [['en16612', 'NF EN 16612'], ['adm', 'Contrainte admissible']])}
+      ${blockHead('03', 'Résistance du verre', adm ? 'Contrainte admissible saisie, comparée à la contrainte maximale de calcul.' : 'NF EN 16612 : f<sub>g;d</sub> = k<sub>e</sub>·k<sub>mod</sub>·k<sub>sp</sub>·f<sub>g;k</sub>/γ<sub>M;A</sub> + k<sub>v</sub>·(f<sub>b;k</sub> − f<sub>g;k</sub>)/γ<sub>M;v</sub>. k<sub>mod</sub> du tableau 25 de FD P78-468 selon la charge, ou 0,663·t<sup>−1/16</sup> pour une durée cumulée t [h]. γ selon FD P78-468 (France) ou NF EN 16612.')}
+      ${chips('res', st.res.mode, [['en16612', 'NF EN 16612 / FD P78-468'], ['adm', 'Contrainte admissible']])}
       <div class="fields" style="margin-top:14px">${adm ? field('Contrainte admissible σ<sub>adm</sub>', inp('res.fadm'), 'MPa')
-        : `${field('Surface', sel('res.surface', GL.SURFACES.map((x) => [x.id, `${x.label} — kₛₚ = ${String(x.ksp).replace('.', ',')}`])))}${field('f<sub>g;k</sub>', inp('res.fgk'), 'MPa', 'verre recuit : 45 MPa')}${field('γ<sub>M;A</sub>', inp('res.gMA'), '', 'verre recuit')}${field('γ<sub>M;v</sub>', inp('res.gMv'), '', 'part due à la précontrainte')}${field('k<sub>e</sub>', inp('res.ke'), '', 'facteur de bord (1,0 en partie courante)')}${field('k<sub>v</sub>', sel('res.kv', [['1', 'Horizontale — 1,0'], ['0.6', 'Verticale — 0,6']]), '', 'orientation de la trempe')}`}</div>
+        : `${field('Surface', sel('res.surface', GL.SURFACES.map((x) => [x.id, `${x.label} — kₛₚ = ${String(x.ksp).replace('.', ',')}`])))}${field('Coefficients γ<sub>M</sub>', sel('res.gRef', [['fd', 'FD P78-468 (France) — 1,5 / 1,5'], ['en', 'NF EN 16612 — 1,8 / 1,2'], ['custom', 'Valeurs saisies']], { rr: true }), '', 'γ<sub>M;A</sub> / γ<sub>M;v</sub>')}${field('γ<sub>M;A</sub>', inp('res.gMA'), '', 'verre recuit')}${field('γ<sub>M;v</sub>', inp('res.gMv'), '', 'part due à la précontrainte')}${field('f<sub>g;k</sub>', inp('res.fgk'), 'MPa', 'verre recuit : 45 MPa')}${field('k<sub>e</sub>', inp('res.ke'), '', st.res.gRef === 'fd' ? 'recuit seulement (FD tableau 24) : 0,8 avec bord libre à bords bruts ou AA, sinon 1,0' : 'facteur de bord (1,0 en partie courante)')}${field('k<sub>v</sub>', sel('res.kv', [['1', 'Horizontale — 1,0'], ['0.6', 'Verticale — 0,6']]), '', 'orientation de la trempe')}`}</div>
       <p class="muted" style="font-size:12.5px;margin-top:8px" id="qFgd"></p>
       ${blockHead('04', 'Charges', `Intensités de calcul (ELU) et de service (ELS) en ${unit}. ${c.strip ? 'Bande : pression uniforme, charge linéique parallèle aux côtés tenus (ex. main courante) ou charge ponctuelle.' : 'Pression maximale pour les charges variables.'}`)}
       <div class="fields">${field('Type de charge', sel('load', Object.entries(c.loads).map(([k, l]) => [k, `${l.label}${c.strip ? '' : ` (${l.roark})`}`]), { rr: true }))}
@@ -182,8 +184,10 @@
         <tbody>${ulsRows}</tbody></table></div>
       <div style="margin:8px 0 4px"><button class="btn sm" data-qact="addUls" title="Ajouter un cas ELU">+</button></div>
       <div class="sub-title">Cas ELS — flèche</div>
+      <div class="fields wide" style="margin-bottom:10px">${field('Critère de flèche', sel('slsCrit', [['fd', 'FD P78-468 § 10.5'], ['libre', 'Limite et plafond saisis']], { rr: true }), '', fdc ? `${esc(FDd.ref)} : ${esc(FDd.Ln)}/${FDd.lim} ≤ ${FDd.max} mm` : 'limite rapportée à b')}
+        ${fdc && R0group(c) ? `<label class="field"><span>&nbsp;</span>${chk('igu', 'Vitrage isolant (limite /150)', true)}</label>` : ''}</div>
       <div class="tbl-wrap"><table class="grid">
-        <thead><tr><th class="rowh">Cas ELS</th><th>${C.valKey(st.load)} [${unit}]</th><th>Limite b /</th><th>Plafond [mm]</th><th>Flèche [mm]</th><th>Taux</th><th></th></tr></thead>
+        <thead><tr><th class="rowh">Cas ELS</th><th>${C.valKey(st.load)} [${unit}]</th><th>Limite ${fdc ? esc(FDd.Ln) : 'b'} /</th><th>Plafond [mm]</th><th>Flèche [mm]</th><th>Taux</th><th></th></tr></thead>
         <tbody>${slsRows}</tbody></table></div>
       <div style="margin:8px 0 4px"><button class="btn sm" data-qact="addSls" title="Ajouter un cas ELS">+</button></div>
       ${(st.cas === 'c1' || st.cas === 'c8') && st.load === 'uni' ? `<div style="margin:12px 0">${chk('large', 'Afficher pour information l’effet membrane (grandes flèches, § 11.11) — les vérifications restent linéaires')}</div>` : ''}
@@ -289,7 +293,7 @@
         ${kv('Dimensions', `a = ${fmtG(g.a, 0)} mm, b = ${fmtG(g.b, 0)} mm${R.case.strip ? '' : `, a/b = ${fmt(g.ratio, 2)}`}`)}
         ${kv('Verre', `E = ${fmtG(g.E, 0)} MPa, ν = ${fmtG(g.nu, 2)}`)}
         ${G.mono ? kv('Épaisseur', `t = ${fmtG(G.hw, 2)} mm`) : kv('Épaisseurs effectives', `h<sub>ef;w</sub> = ${fmt(G.hw, 2)} mm ; h<sub>ef;σ</sub> = ${G.hs.map((h) => fmt(h, 2)).join(' / ')} mm`)}
-        ${adm ? kv('Résistance', `σ<sub>adm</sub> = ${fmtG(+s.res.fadm, 1)} MPa`) : kv('Résistance (EN 16612)', `${esc(sf.label)}, k<sub>sp</sub> = ${fmtG(sf.ksp, 2)}, f<sub>g;k</sub> = ${fmtG(+s.res.fgk, 1)} MPa, γ<sub>M;A</sub> = ${fmtG(+s.res.gMA, 2)}, γ<sub>M;v</sub> = ${fmtG(+s.res.gMv, 2)}, k<sub>e</sub> = ${fmtG(+s.res.ke, 2)}, k<sub>v</sub> = ${fmtG(+s.res.kv, 2)}`)}
+        ${adm ? kv('Résistance', `σ<sub>adm</sub> = ${fmtG(+s.res.fadm, 1)} MPa`) : kv(s.res.gRef === 'fd' ? 'Résistance (NF EN 16612, γ FD P78-468)' : s.res.gRef === 'en' ? 'Résistance (NF EN 16612)' : 'Résistance (NF EN 16612, γ saisis)', `${esc(sf.label)}, k<sub>sp</sub> = ${fmtG(sf.ksp, 2)}, f<sub>g;k</sub> = ${fmtG(+s.res.fgk, 1)} MPa, γ<sub>M;A</sub> = ${fmtG(+s.res.gMA, 2)}, γ<sub>M;v</sub> = ${fmtG(+s.res.gMv, 2)}, k<sub>e</sub> = ${fmtG(+s.res.ke, 2)}, k<sub>v</sub> = ${fmtG(+s.res.kv, 2)}`)}
         ${R.case.strip && s.load !== 'uni' ? kv('Position de la charge', `d = ${fmtG(g.d, 0)} mm${s.load === 'point' ? `, b<sub>eff</sub> = ${fmtG(g.beff, 0)} mm` : ''}`) : ''}
         ${s.load === 'conc' ? kv('Zone chargée', `r<sub>o</sub> = ${fmtG(g.ro, 0)} mm`) : ''}
         </div>${section(R, 420)}</div></div>
@@ -318,6 +322,9 @@
       if (e.type === 'input' && (t.tagName === 'SELECT' || t.type === 'checkbox')) return;
       set(t.dataset.qp, t.type === 'checkbox' ? t.checked : t.value);
       dirty = true; persist();
+      // coefficients γ : le référentiel fixe les valeurs ; une saisie directe passe en « valeurs saisies »
+      if (t.dataset.qp === 'res.gRef' && GL.GAMMAS[t.value]) { st.res.gMA = GL.GAMMAS[t.value].gMA; st.res.gMv = GL.GAMMAS[t.value].gMv; }
+      if (t.dataset.qp === 'res.gMA' || t.dataset.qp === 'res.gMv') { st.res.gRef = C.gRefOf(st.res); const s2 = $('[data-qp="res.gRef"]'); if (s2) s2.value = st.res.gRef; }
       if (t.dataset.rr && e.type === 'change') { const y = window.scrollY; render(app); window.scrollTo(0, y); return; }
       refresh();
     };
@@ -332,7 +339,7 @@
       else if (a === 'res') { st.res.mode = b.dataset.v; rr(); }
       else if (a === 'addPly') { const L = st.comp.plies[st.comp.plies.length - 1] || { h: 8, temper: 'trempe' }; st.comp.plies.push({ h: L.h, temper: L.temper }); rr(); }
       else if (a === 'delPly') { st.comp.plies.splice(+b.dataset.i, 1); rr(); }
-      else if (a === 'addUls') { const L = st.uls[st.uls.length - 1] || {}; st.uls.push({ name: 'ELU ' + (st.uls.length + 1), q: L.q, W: L.W, p: L.p, dur: L.dur || '10min', hrs: L.hrs || '' }); rr(); }
+      else if (a === 'addUls') { const L = st.uls[st.uls.length - 1] || {}; st.uls.push({ name: 'ELU ' + (st.uls.length + 1), q: L.q, W: L.W, p: L.p, dur: L.dur || 'fdW', hrs: L.hrs || '' }); rr(); }
       else if (a === 'delUls') { st.uls.splice(+b.dataset.i, 1); rr(); }
       else if (a === 'addSls') { const L = st.sls[st.sls.length - 1] || {}; st.sls.push({ name: 'ELS ' + (st.sls.length + 1), q: L.q, W: L.W, p: L.p, lim: L.lim, max: L.max }); rr(); }
       else if (a === 'delSls') { st.sls.splice(+b.dataset.i, 1); rr(); }
@@ -348,5 +355,5 @@
 
   const api = { init, render, bind, page, load, flush, get state() { return st; }, get dirty() { return dirty; }, summary: C.summary };
   window.LaminaModules = window.LaminaModules || {};
-  window.LaminaModules.vitrage = { kind: 'vitrage', route: 'roark', title: 'Vitrage — Roark', short: 'vitrage', ref: 'Roark · NF EN 16612', api, upgrade: C.upgrade };
+  window.LaminaModules.vitrage = { kind: 'vitrage', route: 'roark', title: 'Vitrage — Roark', short: 'vitrage', ref: 'Roark · NF EN 16612 · FD P78-468', api, upgrade: C.upgrade };
 })();

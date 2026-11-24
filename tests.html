@@ -15,9 +15,10 @@
 <p>Moteur comparé aux classeurs d'origine (valeurs non concernées par les corrections), aux formules fermées de la RDM et aux cas limites du feuilleté.</p>
 <div id="sum"></div>
 <div id="out"></div>
-<script src="js/glass.js?v=6801ec08"></script>
-<script src="js/roark-calc.js?v=69a21d1c"></script>
-<script src="js/audit.js?v=81589e04"></script>
+<script src="js/glass.js?v=ed226cb4"></script>
+<script src="js/roark-calc.js?v=7dfed337"></script>
+<script src="js/audit.js?v=39f44ffb"></script>
+<script src="js/epaisseur-calc.js?v=4891046c"></script>
 <script>
 (function () {
   const C = LaminaRoark, GL = LaminaGlass, AU = LaminaAudit;
@@ -73,7 +74,36 @@
   const e0 = GL.effective([8, 10], 1.52, 0), e1 = GL.effective([8, 10], 0, 1);
   check('ω = 0 : h_ef;w = (Σh³)^(1/3)', e0.hw, Math.cbrt(8 ** 3 + 10 ** 3)); check('ω = 0 : h_ef;σ,1 = √(Σh³/h₁)', e0.hs[0], Math.sqrt((8 ** 3 + 10 ** 3) / 8));
   check('ω = 1, sans intercalaire : h_ef;w = Σh', e1.hw, 18); check('ω = 1, sans intercalaire : h_ef;σ = Σh', e1.hs[1], 18);
-  const as = AU.asym(); check('2 plis 8/12 : axe neutre au centre de gravité (h_m,1 = h_s·h₂/(h₁+h₂))', as.e.hm[0], (0.5 * (8 + 12) + 1.52) * 12 / 20);
+  const as = AU.asym(); check('2 plis 8/12, option centre de gravité : h_m,1 = h_s·h₂/(h₁+h₂)', as.cg.hm[0], (0.5 * (8 + 12) + 1.52) * 12 / 20);
+  check('2 plis 8/12, plan de symétrie : h_m,1 = (h₁+h_int+h₂)/2 − h₁/2', as.geo.hm[0], (8 + 1.52 + 12) / 2 - 4);
+  const xo = AU.XLE[1], eo = GL.effective(xo.plies, 1.52, 0.7, 'geo');
+  check('copie OneDrive 3 × 8 mm : h_ef;w (F25)', eo.hw, xo.hw, 1e-9); xo.hs.forEach((v, k) => check(`copie OneDrive : h_ef;σ,${k + 1} (F${26 + k})`, eo.hs[k], v, 1e-9));
+
+  // ------------------------------------------------------------------
+  title('C2 · EN 19100-2 annexe A (EET) et ω par cas de charge');
+  const g2 = GL.geometry([10, 10], 1.52, 'geo');
+  const I3 = 2000, d = 5.76, S2 = 2 * 10 * d * d, If = I3 + 12 * S2;
+  check('η = 0 : h_ef;w = (Σh³)^(1/3) (plis libres)', GL.effectiveEET(g2, 0).hw, Math.cbrt(I3));
+  check('η = 1 : h_ef;w = (Σh³ + 12Σh·d²)^(1/3) (monolithe)', GL.effectiveEET(g2, 1).hw, Math.cbrt(If));
+  check('η = 1 : ω équivalent (A.1) = 1', GL.effectiveEET(g2, 1).w, 1);
+  const P5 = GL.psiPlateSS4(500, 1000); check('Ψ_p tableau A.1 (4 appuis simples) : λ = 0,5, b = 1000', P5.psi * 1e6, 49.9366);
+  check('Ψ_p tableau A.1 : λ = 0,5, b = 500 → 199,746 (mise à l’échelle en 1/b²)', GL.psiPlateSS4(250, 500).psi * 1e6, 199.746, 1e-4);
+  check('Ψ_p ≈ π²(1/a² + 1/b²) à λ = 1 (ordre de grandeur, 1 %)', GL.psiPlateSS4(1000, 1000).psi, Math.PI ** 2 * 2e-6, 1e-2);
+  const psi = GL.psiPlateSS4(1500, 3000).psi, et = GL.etaEET(g2, 50, psi, 'plate', 70000, 0.23);
+  check('η (A.4), 10/1,52/10, G = 50 MPa, 1500 × 3000', et.eta, 1 / (1 + 1.52 * 70000 / (50 * (1 - 0.23 ** 2)) * (I3 / If) * 5 * psi));
+  const ee = GL.effectiveEET(g2, et.eta), ew = GL.effective([10, 10], 1.52, ee.w, 'geo');
+  check('cohérence (A.1) : EN 16612 avec ω équivalent redonne h_ef;w EET', ew.hw, ee.hw, 1e-9);
+  const eb2 = GL.etaEET(g2, 3, 168 / (17 * 2000 ** 2), 'beam'), hh = 10, ti = 1.52;
+  check('poutre 2 plis égaux : forme générale = (A.8) n = 2', eb2.eta, 1 / (1 + ti * 70000 / (12 * 3) * (2 * hh ** 3 * 3 / (hh ** 2 + (hh + ti) ** 2 * 3)) * 168 / (17 * 2000 ** 2)));
+  check('G = 0 : η = 0', GL.etaEET(g2, 0, psi, 'plate').eta, 0);
+  check('plaque 4 plis : hors domaine de l’annexe A', GL.etaEET(GL.geometry([8, 8, 8, 8], 1.52), 50, psi, 'plate').err ? 1 : 0, 1);
+  const E0 = LaminaEpaisseur.compute(LaminaEpaisseur.defaultState());
+  check('onglet par défaut (3 × 8 SentryGlas, vent ω = 0,7) = copie OneDrive du classeur', E0.rows.find((r) => r.L.id === 'W').hw, AU.XLE[1].hw, 1e-9);
+  const spv = LaminaEpaisseur.defaultState(); spv.il = 'pvb'; spv.pos = 'int';
+  const Ep = LaminaEpaisseur.compute(spv);
+  check('FD P78-468 tableau 32, PVB, composant intérieur : ω neige = 0', Ep.rows.find((r) => r.L.id === 'S').w, 0);
+  check('FD P78-468 tableau 32, PVB : ω vent = 0,3', Ep.rows.find((r) => r.L.id === 'W').w, 0.3);
+  check('DTA SentryGlas Xtra : ω été ≤ 50 °C joint = 0,85', GL.pick(GL.INTERLAYER.sgx.w.Ej, 'ext'), 0.85);
 
   // ------------------------------------------------------------------
   title('D · « Glass Strength Spreadsheet » (prEN 16612) — 50 ans, float, durci, trempe horizontale');
@@ -84,6 +114,26 @@
   check('f_g;d trempé, vent 10 min', GL.fgd(res, 'trempe', GL.kmodOf(10 / 60)).v, GL.kmodOf(10 / 60) * 45 / 1.8 + 75 / 1.2);
   check('f_g;d recuit, imprimé (k_sp = 0,75), 50 ans', GL.fgd(Object.assign({}, res, { surface: 'imprime' }), 'recuit', GL.kmodOf(438000)).v, 0.29438887674662917 * 0.75 * 45 / 1.8);
   check('k_mod borné à 1 (3 s)', GL.kmodOf(3 / 3600), 1);
+
+  // ------------------------------------------------------------------
+  title('D2 · FD P78-468 tableau 31 (γ_M;A = γ_M;v = 1,5, k_mod du tableau 25, valeurs arrondies à 0,1 MPa)');
+  const fdr = (o) => Object.assign({ surface: 'float', fgk: 45, gMA: 1.5, gMv: 1.5, ke: 1, kv: 1, gRef: 'fd' }, o || {});
+  const km = (id) => GL.DURATION[id].kmod;
+  check('trempé, vent (W) : 80,0', GL.fgd(fdr(), 'trempe', km('fdW')).v, 80, 1e-3);
+  check('trempé, G : 58,7', GL.fgd(fdr(), 'trempe', km('fdG')).v, 58.7, 1e-3);
+  check('trempé avec k_e = 0,8 saisi : k_e sans effet sur le verre précontraint (80,0)', GL.fgd(fdr({ ke: 0.8 }), 'trempe', km('fdW')).v, 80, 1e-3);
+  check('float recuit, W : 30,0', GL.fgd(fdr(), 'recuit', km('fdW')).v, 30, 1e-3);
+  check('float recuit, bord libre brut (k_e = 0,8), W : 24,0', GL.fgd(fdr({ ke: 0.8 }), 'recuit', km('fdW')).v, 24, 1e-3);
+  check('float recuit, G + Sk : 13,2', GL.fgd(fdr(), 'recuit', km('fdS')).v, 13.2, 1e-3);
+  check('imprimé recuit, G + Sa : 10,8', GL.fgd(fdr({ surface: 'imprime' }), 'recuit', km('fdSa')).v, 10.8, 1e-3);
+  check('durci, G : 25,4', GL.fgd(fdr(), 'durci', km('fdG')).v, 25.4, 2e-3);
+  check('durci, hiver : 33,8 (k_mod 0,57)', GL.fgd(fdr(), 'durci', km('fdH')).v, 33.8, 2e-3);
+  check('trempé chimique, W : 100,0', GL.fgd(fdr(), 'chimique', km('fdW')).v, 100, 1e-3);
+  check('float recuit sablé, W : 18,0', GL.fgd(fdr({ surface: 'sable' }), 'recuit', km('fdW')).v, 18, 1e-3);
+  check('flèche FD § 10.5.1 : 3000 × 1500 sur 4 côtés → 1500/60 = 25 mm ≤ 30', (() => { const s = C.defaultState(); const R = C.compute(s); return R.slsCases[0].limv; })(), 25);
+  check('flèche FD § 10.5.2 : console vitrage isolant → b/150 ≤ 50 mm', (() => { const s = C.defaultState(); s.cas = 's-cant'; s.b = 1100; s.igu = true; return C.compute(s).slsCases[0].limv; })(), 1100 / 150);
+  const old = C.upgrade({ cas: 'c1', res: { gMA: 1.8, gMv: 1.2 }, sls: [{ name: 'x', q: 1, lim: 150, max: '' }] });
+  check('ancien calcul : γ 1,8 / 1,2 reconnus « NF EN 16612 », critère de flèche conservé', old.res.gRef === 'en' && old.slsCrit === 'libre' ? 1 : 0, 1);
 
   // ------------------------------------------------------------------
   title('E · Calcul complet');

@@ -256,16 +256,19 @@
     return {
       v: 1, kind: 'vitrage', name: 'Vitrage V1', cas: 'c1', load: 'uni',
       a: 3000, b: 1500,
-      comp: { mode: 'feuillete', t: 10, temper: 'trempe', plies: [{ h: 10, temper: 'trempe' }, { h: 10, temper: 'trempe' }], hint: 1.52, w: 0 },
-      mat: { E: 70000, nu: 0.22 },
-      res: { mode: 'en16612', surface: 'float', fgk: 45, gMA: 1.8, gMv: 1.2, ke: 1, kv: 1, fadm: 50 },
+      comp: { mode: 'feuillete', t: 10, temper: 'trempe', plies: [{ h: 10, temper: 'trempe' }, { h: 10, temper: 'trempe' }], hint: 1.52, w: 0, ref: 'geo' },
+      mat: { E: 70000, nu: 0.23 },
+      res: { mode: 'en16612', gRef: 'fd', surface: 'float', fgk: 45, gMA: 1.5, gMv: 1.5, ke: 1, kv: 1, fadm: 50 },
       pos: { d: '', beff: '', ro: 50 },
-      cyl: false, large: false,
-      uls: [{ name: 'Vent ELU', q: 1.8, W: 1.5, p: 1, dur: '10min', hrs: '' }],
-      sls: [{ name: 'Vent ELS', q: 1.2, W: 1, p: 0.7, lim: 150, max: '' }]
+      cyl: false, large: false, slsCrit: 'fd', igu: false,
+      uls: [{ name: 'Vent ELU', q: 1.8, W: 1.5, p: 1, dur: 'fdW', hrs: '' }],
+      sls: [{ name: 'Vent ELS', q: 1.2, W: 1, p: 0.7, lim: 60, max: 30 }]
     };
   }
   function upgrade(s) {
+    // calculs enregistrés avant le choix des coefficients γ et du critère de flèche FD P78-468 : on conserve leurs valeurs
+    if (s.res && s.res.gRef === undefined) s.res.gRef = gRefOf(s.res);
+    if (s.slsCrit === undefined && Array.isArray(s.sls)) s.slsCrit = 'libre';
     const d = defaultState();
     (function merge(dst, src) {
       Object.keys(src).forEach((k) => {
@@ -281,6 +284,17 @@
     return s;
   }
 
+  function gRefOf(res) {
+    const a = num(res.gMA, 1.8), v = num(res.gMv, 1.2);
+    return Object.keys(GL.GAMMAS).find((k) => Math.abs(GL.GAMMAS[k].gMA - a) < 1e-9 && Math.abs(GL.GAMMAS[k].gMv - v) < 1e-9) || 'custom';
+  }
+  /* Flèche admissible FD P78-468 § 10.5 : 4 côtés — plus petite dimension/60 ≤ 30 mm ;
+     2 ou 3 côtés — b/100 (simple vitrage) ou b/150 (vitrage isolant) ≤ 50 mm. */
+  function fdDefl(c, a, b, igu) {
+    if (c.group === '4 côtés') return { lim: 60, max: 30, L: Math.min(a, b), Ln: 'min(a, b)', ref: 'FD P78-468 § 10.5.1' };
+    return { lim: igu ? 150 : 100, max: 50, L: b, Ln: 'b', ref: 'FD P78-468 § 10.5.2' };
+  }
+
   // clé de l'intensité de charge selon le type : q (kPa), W (kN) ou p (kN/m)
   const valKey = (load) => (load === 'conc' || load === 'point' ? 'W' : load === 'line' ? 'p' : 'q');
   const valUnit = (load) => ({ q: 'kPa', W: 'kN', p: 'kN/m' }[valKey(load)]);
@@ -293,7 +307,7 @@
       return { mono: true, plies: [{ h: t, temper: cp.temper || 'trempe' }], hw: t, hs: [t], total: t, glass: t, eff: null };
     }
     const plies = (cp.plies || []).map((p) => ({ h: num(p.h), temper: p.temper || 'trempe' })).filter((p) => p.h > 0);
-    const eff = GL.effective(plies.map((p) => p.h), num(cp.hint), num(cp.w));
+    const eff = GL.effective(plies.map((p) => p.h), num(cp.hint), num(cp.w), cp.ref === 'cg' ? 'cg' : 'geo');
     if (!eff) return null;
     return { mono: false, plies, hw: eff.hw, hs: eff.hs, total: eff.total, glass: eff.glass, eff };
   }
@@ -306,9 +320,9 @@
     const E = num(s.mat && s.mat.E, GL.E), nu = num(s.mat && s.mat.nu, GL.NU);
     const res = s.res || {};
     const UL = (s.uls || []).map((x, i) => {
-      const dur = GL.DURATION[x.dur] || GL.DURATION['10min'];
+      const dur = GL.DURATION[x.dur] || GL.DURATION.fdW;
       const hrs = dur.h == null ? num(x.hrs) : dur.h;
-      return { name: String(x.name || '').trim() || 'ELU ' + (i + 1), val: num(x[key]), dur, hrs, kmod: hrs > 0 ? GL.kmodOf(hrs) : NaN };
+      return { name: String(x.name || '').trim() || 'ELU ' + (i + 1), val: num(x[key]), dur, hrs, kmod: dur.kmod != null ? dur.kmod : hrs > 0 ? GL.kmodOf(hrs) : NaN };
     });
     const SL = (s.sls || []).map((x, i) => ({ name: String(x.name || '').trim() || 'ELS ' + (i + 1), val: num(x[key]), lim: num(x.lim, 150), max: num(x.max, 0) }));
     const G = composition(s);
@@ -366,19 +380,25 @@
       const p = x.gov; if (!p || !p.s) return;
       const plyTxt = G.mono ? '' : `, pli ${p.k + 1}`;
       x.chk = add({ grp: 'uls', id: 'sig' + i, label: `Contrainte ELU${UL.length > 1 ? ' « ' + x.name + ' »' : ''}${plyTxt} : |σ|_max ≤ ${res.mode === 'adm' ? 'σ_adm' : 'f_g;d'} (${p.s.label.charAt(0).toLowerCase() + p.s.label.slice(1)})`,
-        ref: res.mode === 'adm' ? 'Roark · σ admissible' : `Roark · EN 16612, k_mod = ${x.kmod.toFixed(2).replace('.', ',')}`, Ed: Math.abs(p.s.v), Rd: p.fd.v, unit: 'MPa', ply: p.k });
+        ref: res.mode === 'adm' ? 'Roark · σ admissible' : `Roark · ${res.gRef === 'fd' ? 'FD P78-468' : 'EN 16612'}, k_mod = ${x.kmod.toFixed(2).replace('.', ',')}`, Ed: Math.abs(p.s.v), Rd: p.fd.v, unit: 'MPa', ply: p.k });
       if (res.mode !== 'adm' && !p.fd.available) R.warnings.push(`Pli ${p.k + 1} : traitement « ${GL.TEMPER[p.temper].label.toLowerCase()} » non disponible pour la surface « ${(GL.SURFACE[res.surface] || GL.SURFACE.float).label.toLowerCase()} » (f_b;k non défini) : seule la part recuite est retenue.`);
     });
     R.ulsGov = R.ulsCases.reduce((m, x) => (x.chk && (!m || !m.chk || x.chk.r > m.chk.r) ? x : m), R.ulsCases[0]);
 
     // ---- ELS : flèche avec h_ef;w
+    const FD = s.slsCrit === 'fd' ? fdDefl(c, a, b, !!s.igu) : null;
+    R.fdDefl = FD;
     R.slsCases = SL.map((x, i) => {
       const E1 = evalAt(G.hw, x.val), y = E1.out.find((o) => o.unit === 'mm');
-      const lim = x.max > 0 ? Math.min(b / x.lim, x.max) : b / x.lim;
-      const o = Object.assign(x, { out: E1.out, y, limv: lim, beam: E1.beam });
-      if (y) o.chk = add({ grp: 'sls', id: 'defl' + i, label: `Flèche ELS${SL.length > 1 ? ' « ' + x.name + ' »' : ''} ≤ ${x.max > 0 && x.max < b / x.lim ? fmtN(x.max) + ' mm' : 'b/' + fmtN(x.lim)}`, ref: 'Roark · ELS', Ed: Math.abs(y.v), Rd: lim, unit: 'mm' });
+      if (FD) { x.lim = FD.lim; x.max = FD.max; }
+      const Lr = FD ? FD.L : b, Ln = FD ? FD.Ln : 'b';
+      const lim = x.max > 0 ? Math.min(Lr / x.lim, x.max) : Lr / x.lim;
+      const o = Object.assign(x, { out: E1.out, y, limv: lim, beam: E1.beam, Ln });
+      if (y) o.chk = add({ grp: 'sls', id: 'defl' + i, label: `Flèche ELS${SL.length > 1 ? ' « ' + x.name + ' »' : ''} ≤ ${x.max > 0 && x.max < Lr / x.lim ? fmtN(x.max) + ' mm' : Ln + '/' + fmtN(x.lim)}`, ref: FD ? 'Roark · ' + FD.ref : 'Roark · ELS', Ed: Math.abs(y.v), Rd: lim, unit: 'mm' });
       return o;
     });
+    if (res.mode !== 'adm' && G.plies.some((p) => p.temper === 'recuit') && Object.values(c.edges).includes('fr') && num(res.ke, 1) === 1)
+      R.info.push('Verre recuit avec bord libre : FD P78-468 tableau 24 prend k_e = 0,8 si les bords sont bruts ou AA (1,0 s’ils sont polis ou JPI).');
     R.slsGov = R.slsCases.reduce((m, x) => (x.chk && (!m.chk || x.chk.r > m.chk.r) ? x : m), R.slsCases[0]);
 
     // grandeurs affichées : contraintes du cas ELU dimensionnant (pli dimensionnant), flèches avec h_ef;w
@@ -447,5 +467,5 @@
     } catch (e) { return null; }
   }
 
-  window.LaminaRoark = { CASES, CASE, GROUPS, LARGE, LD_Q, coef, largeDefl, evalPlate, evalStrip, beam, compute, composition, compLabel, defaultState, upgrade, summary, valKey, valUnit, num };
+  window.LaminaRoark = { CASES, CASE, GROUPS, LARGE, LD_Q, coef, largeDefl, evalPlate, evalStrip, beam, compute, composition, compLabel, defaultState, upgrade, summary, valKey, valUnit, num, gRefOf, fdDefl };
 })();
