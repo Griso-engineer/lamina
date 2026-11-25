@@ -16,9 +16,11 @@
 <div id="sum"></div>
 <div id="out"></div>
 <script src="js/glass.js?v=ed226cb4"></script>
-<script src="js/roark-calc.js?v=7dfed337"></script>
+<script src="js/roark-calc.js?v=ef057801"></script>
 <script src="js/audit.js?v=39f44ffb"></script>
 <script src="js/epaisseur-calc.js?v=4891046c"></script>
+<script src="js/predim-calc.js?v=13fdf221"></script>
+<script src="js/resistance-calc.js?v=36ea8f08"></script>
 <script>
 (function () {
   const C = LaminaRoark, GL = LaminaGlass, AU = LaminaAudit;
@@ -130,27 +132,39 @@
   check('durci, hiver : 33,8 (k_mod 0,57)', GL.fgd(fdr(), 'durci', km('fdH')).v, 33.8, 2e-3);
   check('trempé chimique, W : 100,0', GL.fgd(fdr(), 'chimique', km('fdW')).v, 100, 1e-3);
   check('float recuit sablé, W : 18,0', GL.fgd(fdr({ surface: 'sable' }), 'recuit', km('fdW')).v, 18, 1e-3);
-  check('flèche FD § 10.5.1 : 3000 × 1500 sur 4 côtés → 1500/60 = 25 mm ≤ 30', (() => { const s = C.defaultState(); const R = C.compute(s); return R.slsCases[0].limv; })(), 25);
-  check('flèche FD § 10.5.2 : console vitrage isolant → b/150 ≤ 50 mm', (() => { const s = C.defaultState(); s.cas = 's-cant'; s.b = 1100; s.igu = true; return C.compute(s).slsCases[0].limv; })(), 1100 / 150);
-  const old = C.upgrade({ cas: 'c1', res: { gMA: 1.8, gMv: 1.2 }, sls: [{ name: 'x', q: 1, lim: 150, max: '' }] });
-  check('ancien calcul : γ 1,8 / 1,2 reconnus « NF EN 16612 », critère de flèche conservé', old.res.gRef === 'en' && old.slsCrit === 'libre' ? 1 : 0, 1);
+  const PD = LaminaPredim, RS = LaminaResistance;
+  check('flèche FD § 10.5.1 : 3000 × 1500 sur 4 côtés → 1500/60 = 25 mm ≤ 30', PD.compute(PD.defaultState()).rows[1].Rd, 25);
+  check('flèche FD § 10.5.2 : console vitrage isolant → b/150 ≤ 50 mm', (() => { const s = PD.defaultState(); s.cas = 's-cant'; s.b = 1100; s.igu = true; return PD.compute(s).rows[1].Rd; })(), 1100 / 150);
+  const rs = RS.compute(RS.defaultState()), rW = rs.rows.find((r) => r.dur.id === 'fdW');
+  check('onglet Résistance (FD P78-468) : trempé, vent 3 s = 80,0', rW.vals.trempe.v, 80, 1e-9);
+  check('onglet Résistance : recuit, poids propre 50 ans = 8,7', rs.rows.find((r) => r.dur.id === 'fdG').vals.recuit.v, 8.7, 1e-3);
+  const rsEn = RS.defaultState(); rsEn.gRef = 'en'; rsEn.gMA = 1.8; rsEn.gMv = 1.2;
+  check('onglet Résistance (NF EN 16612) : trempé, vent 3 s = 25 + 62,5', RS.compute(rsEn).rows.find((r) => r.dur.id === 'fdW').vals.trempe.v, 45 / 1.8 + 75 / 1.2);
+  check('onglet Résistance : durcis émaillés sans f_b;k chimique → « non disponible »', (() => { const s = RS.defaultState(); s.surface = 'emaille'; return RS.compute(s).rows[0].vals.chimique === null ? 1 : 0; })(), 1);
 
   // ------------------------------------------------------------------
-  title('E · Calcul complet');
-  const s0 = C.defaultState(); const R0 = C.compute(s0);
-  check('état par défaut valide', R0.valid ? 1 : 0, 1);
-  const sm = C.defaultState(); sm.comp.mode = 'mono'; sm.comp.t = 18;
-  const sl = C.defaultState(); sl.comp = { mode: 'feuillete', plies: [{ h: 8, temper: 'trempe' }, { h: 10, temper: 'trempe' }], hint: 0, w: 1 };
-  const Rm = C.compute(sm), Rl = C.compute(sl);
-  check('feuilleté ω = 1 sans intercalaire ≡ monolithique Σh : σ', Rl.ulsCases[0].gov.s.v, Rm.ulsCases[0].gov.s.v);
-  check('feuilleté ω = 1 sans intercalaire ≡ monolithique Σh : flèche', Rl.slsCases[0].y.v, Rm.slsCases[0].y.v);
-  const sc = C.defaultState(); sc.cas = 's-cant'; sc.load = 'line'; sc.comp = { mode: 'mono', t: 15, temper: 'trempe' }; sc.a = 1000; sc.b = 1100; sc.uls[0].p = 1.5; sc.pos.d = '';
-  const Rc = C.compute(sc);
-  check('garde-corps console 1,1 m, 1,5 kN/m en tête : σ = 6·p·b/t²', Math.abs(Rc.ulsCases[0].gov.s.v), 6 * 1.5 * 1100 / 225);
-  const sp = C.defaultState(); sp.cas = 's-ss'; sp.load = 'point'; sp.comp = { mode: 'mono', t: 12, temper: 'trempe' }; sp.a = 1200; sp.b = 2000; sp.uls[0].W = 1; sp.pos.beff = 600;
-  const Rp = C.compute(sp);
-  check('bande, P = 1 kN au milieu sur b_eff = 600 : σ = 6·(P/b_eff)·L/4/t²', Rp.ulsCases[0].gov.s.v, 6 * (1000 / 600) * 2000 / 4 / 144);
-
+  title('E · Pré-dimensionnement (une ligne par cas de charge)');
+  const R0 = PD.compute(PD.defaultState());
+  check('état par défaut valide, 2 lignes calculées', R0.valid && R0.rows.every((o) => !o.err) ? 1 : 0, 1);
+  check('ELU 4 appuis simples, a/b = 2 : σ = β·q·b²/h² (h = 18,06)', R0.rows[0].Ed, 0.6102 * 1.8e-3 * 1500 ** 2 / 18.06 ** 2);
+  check('ELS : y = α·q·b⁴/(E·h³) (h = 16,37)', R0.rows[1].Ed, 0.111 * 1.2e-3 * 1500 ** 4 / (70000 * 16.37 ** 3));
+  const sc = PD.defaultState(); Object.assign(sc, { cas: 's-cant', a: 1000, b: 1100 }); sc.rows = [{ name: 'MC', st: 'uls', load: 'line', val: 1.5, d: '', beff: '', h: 15, f: 80 }];
+  check('garde-corps console 1,1 m, 1,5 kN/m en tête : σ = 6·p·b/h²', PD.compute(sc).rows[0].Ed, 6 * 1.5 * 1100 / 225);
+  const sp = PD.defaultState(); Object.assign(sp, { cas: 's-ss', a: 1200, b: 2000 }); sp.rows = [{ name: 'P', st: 'uls', load: 'point', val: 1, d: '', beff: 600, h: 12, f: 80 }];
+  check('bande, P = 1 kN au milieu sur b_eff = 600 : σ = 6·(P/b_eff)·L/4/h²', PD.compute(sp).rows[0].Ed, 6 * (1000 / 600) * 2000 / 4 / 144);
+  const mix = PD.defaultState(); Object.assign(mix, { cas: 's-ss', a: 1000, b: 2000 });
+  mix.rows = [{ st: 'uls', load: 'uni', val: 1, h: 12, f: 80 }, { st: 'uls', load: 'line', val: 1, d: 500, h: 12, f: 80 }, { st: 'sls', load: 'point', val: 1, d: '', beff: 1000, h: 12, lim: 100 }];
+  const Rmix = PD.compute(mix);
+  check('lignes de types différents : pression → wL²/8', Rmix.rows[0].Ed, 6 * 1e-3 * 2000 ** 2 / 8 / 144);
+  check('lignes de types différents : linéique à d = 500 → p·d·(L−d)/L', Rmix.rows[1].Ed, 6 * 1 * 500 * 1500 / 2000 / 144);
+  check('lignes de types différents : ponctuelle, flèche P·L³/48D', Rmix.rows[2].Ed, 1 * L ** 0 * 2000 ** 3 / (48 * 70000 * 1728 / 12), 1e-5);
+  const bad = PD.defaultState(); bad.rows[0].load = 'line';
+  check('charge linéique sur plaque 4 côtés : ligne signalée non disponible', PD.compute(bad).rows[0].err ? 1 : 0, 1);
+  const v1 = { kind: 'vitrage', v: 1, cas: 'c1', load: 'uni', a: 3000, b: 1500, comp: { mode: 'mono', t: 12, temper: 'trempe' }, mat: { E: 70000, nu: 0.22 }, res: { mode: 'en16612', gMA: 1.8, gMv: 1.2, surface: 'float', fgk: 45, ke: 1, kv: 1 }, pos: {}, uls: [{ name: 'Vent', q: 1.5, dur: 'fdW' }], sls: [{ name: 'Vent ELS', q: 1, lim: 150, max: '' }] };
+  const up = PD.upgrade(JSON.parse(JSON.stringify(v1)));
+  check('ancien calcul « Roark » : 2 lignes reprises, h = t = 12', up.rows.length === 2 && up.rows[0].h === 12 && up.rows[1].h === 12 ? 1 : 0, 1);
+  check('ancien calcul : f_g;d repris avec ses γ (NF EN 16612, vent 3 s, trempé)', up.rows[0].f, Math.round((45 / 1.8 + 75 / 1.2) * 10) / 10);
+  check('ancien calcul : critère de flèche saisi conservé (b/150)', PD.compute(up).rows[1].Rd, 10);
   document.getElementById('sum').innerHTML = `<p class="${fails ? 'ko' : 'ok'}">${n - fails} / ${n} tests réussis</p>`;
   document.getElementById('out').innerHTML = `<table><thead><tr><th>Test</th><th>Calculé</th><th>Attendu</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
   window.LAMINA_TESTS = { n, fails };

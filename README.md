@@ -7,23 +7,24 @@ Firmitas (onglets de calcul, projets dans le navigateur, fiche NDC en PDF ou Wor
 
 ## Onglets
 
-- **Roark** : prédimensionnement rapide d'un vitrage rectangulaire chargé normalement à son plan.
+- **Pré-dimensionnement** : vitrage rectangulaire chargé normalement à son plan. On définit d'abord les appuis et
+  les dimensions (hors épaisseur, vue en élévation), puis un tableau de cas de charge : une ligne par cas, ELU
+  (contrainte ≤ f_g;d) ou ELS (flèche), pression uniforme, charge linéique ou ponctuelle, épaisseur équivalente h
+  et résistance f_g;d saisies (reprises des onglets Épaisseur équivalente et Résistance).
   - *Plaques* appuyées sur 4, 3 ou 2 côtés adjacents (appuis simples, encastrements, bords libres) :
     W. C. Young & R. G. Budynas, *Roark's Formulas for Stress and Strain*, tableau 11.4, coefficients α, β, γ
-    interpolés en a/b (reprise de l'onglet Plaques de Firmitas) ; pression uniforme, variable ou charge
-    concentrée selon le cas ; effet membrane (§ 11.11) pour information.
+    interpolés en a/b (reprise de l'onglet Plaques de Firmitas) ; pression uniforme, variable ou concentrée.
   - *Bandes et consoles* tenues sur 1 ou 2 côtés opposés (appuis simples, encastré–appuyé, bi-encastré,
     console) : statique de poutre de largeur unité, pression uniforme, charge linéique parallèle aux appuis
     (main courante) ou charge ponctuelle en position quelconque, avec largeur participante b_eff ;
-    rigidité de poutre E·t³/12 ou de plaque E·t³/12(1 − ν²) ; flèche par intégration exacte.
-  - *Verre* monolithique ou feuilleté (plis de bas en haut, traitement par pli, intercalaire, ω) :
-    épaisseurs effectives NF EN 16612 (h_ef;w pour la flèche, h_ef;σ,j pour la contrainte du pli j).
-  - *Résistance* NF EN 16612 par cas ELU : coefficients γ au choix FD P78-468 (France, 1,5 / 1,5, par défaut)
-    ou NF EN 16612 (1,8 / 1,2) ; k_mod du tableau 25 de FD P78-468 ou loi en durée ; k_sp, k_e (verre recuit
-    seulement selon FD P78-468), k_v, f_b;k selon le traitement ; ou contrainte admissible saisie.
+    rigidité de poutre E·h³/12 ou de plaque E·h³/12(1 − ν²) ; flèche par intégration exacte.
   - *Flèche* : critère FD P78-468 § 10.5 (4 côtés : min(a, b)/60 ≤ 30 mm ; 2 ou 3 côtés : b/100 ou b/150 en
-    vitrage isolant, ≤ 50 mm) ou limite et plafond saisis ; ν = 0,23 par défaut.
-  - Plusieurs cas ELU (contrainte) et ELS (flèche limite b/n et plafond en mm).
+    vitrage isolant, ≤ 50 mm) ou limite et plafond saisis par ligne ; ν = 0,23 par défaut.
+  - Les calculs enregistrés avec l'ancien onglet « Roark » sont convertis (h et f_g;d recalculés par ligne).
+- **Résistance** : f_g;d pour toutes les durées de charge (tableau 25 de FD P78-468 et durées cumulées) et tous
+  les traitements (recuit, durci, trempé, trempé chimiquement) ; coefficients γ au choix FD P78-468 (France,
+  1,5 / 1,5, par défaut) ou NF EN 16612 (1,8 / 1,2) ; k_sp selon la surface, k_e (verre recuit seulement selon
+  FD P78-468), k_v.
 - **Épaisseur équivalente** : verre feuilleté de n plis, intercalaires d'épaisseurs différentes ; NF EN 16612 annexe D avec ω
   par cas de charge selon FD P78-468 tableau 32 (PVB/EVA, PVB acoustique, gel) ou DTA 6/15-2253_V5 (SentryGlas®,
   SentryGlas® Xtra™), ou ω saisis ; distances h_m depuis le plan de symétrie du feuilleté (texte normatif) ou le

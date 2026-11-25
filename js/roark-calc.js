@@ -9,8 +9,7 @@
      appuis simple / encastré / libre ; pression, charge linéique ou charge ponctuelle en position quelconque.
        m(x) = M_A + R_A·x − w·x²/2 − P·⟨x − d⟩ ; σ = 6·m/t² ; D′·y″ = −m, D′ = E·t³/12
        (ou E·t³/12(1 − ν²) en flexion cylindrique), intégration exacte (Simpson sur m quadratique par morceaux).
-   · Verre : monolithique ou feuilleté (épaisseurs effectives h_ef;w et h_ef;σ,j, NF EN 16612) ;
-     résistance f_g;d par cas ELU selon la durée de la charge (k_mod), ou contrainte admissible saisie.
+   Bibliothèque de formules utilisée par l'onglet Pré-dimensionnement (js/predim-calc.js) et la page de contre-vérification.
    Unités internes : N, mm, MPa ; pressions saisies en kPa, charges linéiques en kN/m, charges ponctuelles en kN.
    ========================================================================== */
 (function () {
@@ -251,39 +250,7 @@
     return { out, beam: B, Dp };
   }
 
-  /* ---------------------------------------------------------------- état */
-  function defaultState() {
-    return {
-      v: 1, kind: 'vitrage', name: 'Vitrage V1', cas: 'c1', load: 'uni',
-      a: 3000, b: 1500,
-      comp: { mode: 'feuillete', t: 10, temper: 'trempe', plies: [{ h: 10, temper: 'trempe' }, { h: 10, temper: 'trempe' }], hint: 1.52, w: 0, ref: 'geo' },
-      mat: { E: 70000, nu: 0.23 },
-      res: { mode: 'en16612', gRef: 'fd', surface: 'float', fgk: 45, gMA: 1.5, gMv: 1.5, ke: 1, kv: 1, fadm: 50 },
-      pos: { d: '', beff: '', ro: 50 },
-      cyl: false, large: false, slsCrit: 'fd', igu: false,
-      uls: [{ name: 'Vent ELU', q: 1.8, W: 1.5, p: 1, dur: 'fdW', hrs: '' }],
-      sls: [{ name: 'Vent ELS', q: 1.2, W: 1, p: 0.7, lim: 60, max: 30 }]
-    };
-  }
-  function upgrade(s) {
-    // calculs enregistrés avant le choix des coefficients γ et du critère de flèche FD P78-468 : on conserve leurs valeurs
-    if (s.res && s.res.gRef === undefined) s.res.gRef = gRefOf(s.res);
-    if (s.slsCrit === undefined && Array.isArray(s.sls)) s.slsCrit = 'libre';
-    const d = defaultState();
-    (function merge(dst, src) {
-      Object.keys(src).forEach((k) => {
-        if (dst[k] === undefined) dst[k] = src[k];
-        else if (src[k] && typeof src[k] === 'object' && !Array.isArray(src[k]) && dst[k] && typeof dst[k] === 'object') merge(dst[k], src[k]);
-      });
-    })(s, d);
-    if (!CASE[s.cas]) s.cas = 'c1';
-    if (!CASE[s.cas].loads[s.load]) s.load = 'uni';
-    if (!Array.isArray(s.uls) || !s.uls.length) s.uls = d.uls;
-    if (!Array.isArray(s.sls) || !s.sls.length) s.sls = d.sls;
-    if (!Array.isArray(s.comp.plies) || !s.comp.plies.length) s.comp.plies = d.comp.plies;
-    return s;
-  }
-
+  /* ---------------------------------------------------------------- outils communs */
   function gRefOf(res) {
     const a = num(res.gMA, 1.8), v = num(res.gMv, 1.2);
     return Object.keys(GL.GAMMAS).find((k) => Math.abs(GL.GAMMAS[k].gMA - a) < 1e-9 && Math.abs(GL.GAMMAS[k].gMv - v) < 1e-9) || 'custom';
@@ -294,178 +261,9 @@
     if (c.group === '4 côtés') return { lim: 60, max: 30, L: Math.min(a, b), Ln: 'min(a, b)', ref: 'FD P78-468 § 10.5.1' };
     return { lim: igu ? 150 : 100, max: 50, L: b, Ln: 'b', ref: 'FD P78-468 § 10.5.2' };
   }
-
   // clé de l'intensité de charge selon le type : q (kPa), W (kN) ou p (kN/m)
   const valKey = (load) => (load === 'conc' || load === 'point' ? 'W' : load === 'line' ? 'p' : 'q');
   const valUnit = (load) => ({ q: 'kPa', W: 'kN', p: 'kN/m' }[valKey(load)]);
 
-  /* Composition : plis de bas en haut, épaisseurs effectives. */
-  function composition(s) {
-    const cp = s.comp || {};
-    if (cp.mode !== 'feuillete') {
-      const t = num(cp.t);
-      return { mono: true, plies: [{ h: t, temper: cp.temper || 'trempe' }], hw: t, hs: [t], total: t, glass: t, eff: null };
-    }
-    const plies = (cp.plies || []).map((p) => ({ h: num(p.h), temper: p.temper || 'trempe' })).filter((p) => p.h > 0);
-    const eff = GL.effective(plies.map((p) => p.h), num(cp.hint), num(cp.w), cp.ref === 'cg' ? 'cg' : 'geo');
-    if (!eff) return null;
-    return { mono: false, plies, hw: eff.hw, hs: eff.hs, total: eff.total, glass: eff.glass, eff };
-  }
-
-  function compute(s) {
-    const R = { valid: true, warnings: [], info: [], checks: [] };
-    const c = CASE[s.cas] || CASE.c1, L = c.loads[s.load] || c.loads.uni, key = valKey(s.load);
-    R.case = c; R.L = L; R.key = key; R.unit = valUnit(s.load);
-    let a = num(s.a), b = num(s.b);
-    const E = num(s.mat && s.mat.E, GL.E), nu = num(s.mat && s.mat.nu, GL.NU);
-    const res = s.res || {};
-    const UL = (s.uls || []).map((x, i) => {
-      const dur = GL.DURATION[x.dur] || GL.DURATION.fdW;
-      const hrs = dur.h == null ? num(x.hrs) : dur.h;
-      return { name: String(x.name || '').trim() || 'ELU ' + (i + 1), val: num(x[key]), dur, hrs, kmod: dur.kmod != null ? dur.kmod : hrs > 0 ? GL.kmodOf(hrs) : NaN };
-    });
-    const SL = (s.sls || []).map((x, i) => ({ name: String(x.name || '').trim() || 'ELS ' + (i + 1), val: num(x[key]), lim: num(x.lim, 150), max: num(x.max, 0) }));
-    const G = composition(s);
-    const bad = [];
-    if (!(a > 0) || !(b > 0)) bad.push('côtés a et b');
-    if (!G || G.plies.some((p) => !(p.h > 0))) bad.push('épaisseur du verre');
-    if (G && !G.mono && !(num(s.comp.hint) >= 0)) bad.push('épaisseur d\'intercalaire');
-    if (G && !G.mono && !(num(s.comp.w) >= 0 && num(s.comp.w) <= 1)) bad.push('coefficient ω (0 à 1)');
-    if (!(E > 0)) bad.push('module E');
-    if (!(nu >= 0 && nu < 0.5)) bad.push('coefficient de Poisson');
-    if (res.mode === 'adm' ? !(num(res.fadm) > 0) : !(num(res.fgk) > 0 && num(res.gMA) > 0 && num(res.gMv) > 0 && num(res.ke) > 0 && num(res.kv) > 0)) bad.push('paramètres de résistance');
-    if (res.mode !== 'adm' && UL.some((x) => !(x.hrs > 0))) bad.push('durée de charge');
-    if (SL.some((x) => !(x.lim > 0))) bad.push('flèche limite');
-    if (UL.some((x) => x.val < 0) || SL.some((x) => x.val < 0)) bad.push('charges (positives attendues)');
-    if (s.load === 'conc' && !(num(s.pos.ro) > 0)) bad.push('rayon de la zone chargée');
-    if (bad.length) { R.valid = false; R.warnings.push('Données invalides : ' + bad.join(', ') + '.'); return R; }
-
-    let swapped = false;
-    if (c.swap && a > b) { [a, b] = [b, a]; swapped = true; }
-    const ratio = a / b;
-    const g = { a, b, E, nu, ro: num(s.pos.ro, 50), cyl: !!s.cyl };
-    if (c.strip) {
-      const dIn = String(s.pos.d == null ? '' : s.pos.d).trim();
-      g.d = dIn === '' ? (c.bc === 'cant' ? b : b / 2) : num(dIn);
-      g.dDefault = dIn === '';
-      const bIn = String(s.pos.beff == null ? '' : s.pos.beff).trim();
-      g.beff = bIn === '' ? a : num(bIn);
-      if (s.load !== 'uni' && !(g.d >= 0 && g.d <= b)) { R.valid = false; R.warnings.push(`Données invalides : la position d de la charge doit être comprise entre 0 et b = ${b} mm.`); return R; }
-      if (s.load === 'point' && !(g.beff > 0)) { R.valid = false; R.warnings.push('Données invalides : largeur participante b_eff.'); return R; }
-    }
-    R.geo = Object.assign({ ratio, swapped, t: G.hw }, g);
-    R.comp = G;
-
-    const evalAt = (t, val) => {
-      const gg = Object.assign({}, g, { t });
-      if (c.strip) return evalStrip(c, s.load, gg, val);
-      return evalPlate(c, L, gg, key === 'q' ? val : 0, key === 'W' ? val : 0);
-    };
-    const sMaxOf = (out) => out.filter((o) => o.unit === 'MPa').reduce((m, o) => (!m || Math.abs(o.v) > Math.abs(m.v) ? o : m), null);
-
-    // résistance de calcul d'un pli pour un cas ELU
-    const fdOf = (temper, kmod) => (res.mode === 'adm' ? { v: num(res.fadm), adm: true, available: true } : GL.fgd(res, temper, kmod));
-
-    // ---- ELU : contrainte dans chaque pli (épaisseur effective h_ef;σ,j), comparée à f_g;d du pli
-    R.ulsCases = UL.map((x) => {
-      const plies = G.plies.map((p, k) => {
-        const E1 = evalAt(G.hs[k], x.val), sm = sMaxOf(E1.out), fd = fdOf(p.temper, x.kmod);
-        return { k, h: p.h, temper: p.temper, hs: G.hs[k], out: E1.out, s: sm, fd, r: fd.v > 0 ? Math.abs(sm ? sm.v : 0) / fd.v : Infinity };
-      });
-      const gov = plies.reduce((m, p) => (!m || p.r > m.r ? p : m), null);
-      return Object.assign(x, { plies, gov });
-    });
-    const add = (o) => { o.r = o.Rd > 0 ? Math.abs(o.Ed) / o.Rd : (Math.abs(o.Ed) > 0 ? Infinity : 0); R.checks.push(o); return o; };
-    R.ulsCases.forEach((x, i) => {
-      const p = x.gov; if (!p || !p.s) return;
-      const plyTxt = G.mono ? '' : `, pli ${p.k + 1}`;
-      x.chk = add({ grp: 'uls', id: 'sig' + i, label: `Contrainte ELU${UL.length > 1 ? ' « ' + x.name + ' »' : ''}${plyTxt} : |σ|_max ≤ ${res.mode === 'adm' ? 'σ_adm' : 'f_g;d'} (${p.s.label.charAt(0).toLowerCase() + p.s.label.slice(1)})`,
-        ref: res.mode === 'adm' ? 'Roark · σ admissible' : `Roark · ${res.gRef === 'fd' ? 'FD P78-468' : 'EN 16612'}, k_mod = ${x.kmod.toFixed(2).replace('.', ',')}`, Ed: Math.abs(p.s.v), Rd: p.fd.v, unit: 'MPa', ply: p.k });
-      if (res.mode !== 'adm' && !p.fd.available) R.warnings.push(`Pli ${p.k + 1} : traitement « ${GL.TEMPER[p.temper].label.toLowerCase()} » non disponible pour la surface « ${(GL.SURFACE[res.surface] || GL.SURFACE.float).label.toLowerCase()} » (f_b;k non défini) : seule la part recuite est retenue.`);
-    });
-    R.ulsGov = R.ulsCases.reduce((m, x) => (x.chk && (!m || !m.chk || x.chk.r > m.chk.r) ? x : m), R.ulsCases[0]);
-
-    // ---- ELS : flèche avec h_ef;w
-    const FD = s.slsCrit === 'fd' ? fdDefl(c, a, b, !!s.igu) : null;
-    R.fdDefl = FD;
-    R.slsCases = SL.map((x, i) => {
-      const E1 = evalAt(G.hw, x.val), y = E1.out.find((o) => o.unit === 'mm');
-      if (FD) { x.lim = FD.lim; x.max = FD.max; }
-      const Lr = FD ? FD.L : b, Ln = FD ? FD.Ln : 'b';
-      const lim = x.max > 0 ? Math.min(Lr / x.lim, x.max) : Lr / x.lim;
-      const o = Object.assign(x, { out: E1.out, y, limv: lim, beam: E1.beam, Ln });
-      if (y) o.chk = add({ grp: 'sls', id: 'defl' + i, label: `Flèche ELS${SL.length > 1 ? ' « ' + x.name + ' »' : ''} ≤ ${x.max > 0 && x.max < Lr / x.lim ? fmtN(x.max) + ' mm' : Ln + '/' + fmtN(x.lim)}`, ref: FD ? 'Roark · ' + FD.ref : 'Roark · ELS', Ed: Math.abs(y.v), Rd: lim, unit: 'mm' });
-      return o;
-    });
-    if (res.mode !== 'adm' && G.plies.some((p) => p.temper === 'recuit') && Object.values(c.edges).includes('fr') && num(res.ke, 1) === 1)
-      R.info.push('Verre recuit avec bord libre : FD P78-468 tableau 24 prend k_e = 0,8 si les bords sont bruts ou AA (1,0 s’ils sont polis ou JPI).');
-    R.slsGov = R.slsCases.reduce((m, x) => (x.chk && (!m.chk || x.chk.r > m.chk.r) ? x : m), R.slsCases[0]);
-
-    // grandeurs affichées : contraintes du cas ELU dimensionnant (pli dimensionnant), flèches avec h_ef;w
-    const ug = R.ulsGov, ply = ug && ug.gov;
-    const Uw = evalAt(G.hw, ug ? ug.val : 0);
-    R.uls = (ply ? ply.out : Uw.out).map((o, i) => (o.unit === 'MPa' ? o : Uw.out[i]));
-    R.cs = Uw.cs; R.rop = Uw.rop; R.ulsBeam = Uw.beam;
-    R.sLinW = (sMaxOf(Uw.out) || { v: 0 }).v;   // contrainte linéaire ELU avec h_ef;w (comparaison grandes flèches)
-    R.sls = R.slsGov ? R.slsGov.out : [];
-    if (R.slsGov && !G.mono) {   // contraintes ELS affichées avec h_ef;σ du même pli que l'ELU
-      const Es = evalAt(G.hs[ply ? ply.k : 0], R.slsGov.val);
-      R.sls = R.sls.map((o, i) => (o.unit === 'MPa' ? Es.out[i] : o));
-    }
-    R.slsBeam = R.slsGov ? R.slsGov.beam : null;
-
-    // ---- domaine de validité et remarques
-    R.oor = false;
-    if (!c.strip) {
-      if (Object.values(Uw.cs).some((x) => x.clamp)) { R.oor = true; R.warnings.push(`Hors domaine : a/b = ${ratio.toFixed(2).replace('.', ',')} sort du tableau de Roark (${String(L.r[0]).replace('.', ',')} à ${L.r[L.r.length - 1] === INF ? '∞' : String(L.r[L.r.length - 1]).replace('.', ',')}). Les valeurs affichées utilisent les coefficients de la borne, à titre indicatif seulement : conclusion impossible.`); }
-      if (c.min >= 1 && num(s.a) < num(s.b)) R.warnings.push('Pour ce cas, a désigne le grand côté : saisir a ≥ b.');
-      [...new Set(Uw.out.filter((o) => o.doubt).map((o) => o.doubt))].forEach((x) => R.warnings.push(x + '.'));
-      if (swapped) R.info.push('a > b : côtés permutés pour rester dans le tableau (cas symétrique).');
-      if (L.infNote) R.info.push(L.infNote + '.');
-      if (L.nu != null && Math.abs(L.nu - nu) > 0.02) R.info.push(`Coefficients établis pour ν = ${String(L.nu).replace('.', ',')} (verre : ${String(nu).replace('.', ',')}) : écart attendu de quelques % sur la flèche, jusqu'à 15 % sur les contraintes selon Roark (§ 11.10).`);
-      if (s.load === 'conc') R.info.push(`Charge répartie sur un disque de rayon r_o = ${fmtN(g.ro)} mm (r′_o = ${fmtN(Uw.rop, 1)} mm).`);
-    } else {
-      R.info.push(`Bande de largeur unité, portée b = ${fmtN(b)} mm : statique de poutre, ${s.cyl ? 'rigidité de plaque en flexion cylindrique D′ = E·t³/12(1 − ν²)' : 'rigidité de poutre D′ = E·t³/12 (sans effet de Poisson, du côté de la sécurité)'}. Bords parallèles à la portée libres.`);
-      if (s.load !== 'uni') R.info.push(`Charge ${s.load === 'line' ? 'linéique' : 'ponctuelle'} à d = ${fmtN(g.d)} mm du côté z = 0${g.dDefault ? (c.bc === 'cant' ? ' (extrémité libre par défaut)' : ' (mi-portée par défaut)') : ''}.`);
-      if (s.load === 'point') {
-        if (g.beff >= a - 1e-9) R.warnings.push(`Charge ponctuelle répartie sur toute la largeur a = ${fmtN(a)} mm (hypothèse du classeur) : non sécuritaire si a est grand devant la portée. Préciser une largeur participante b_eff.`);
-        else R.info.push(`Charge ponctuelle répartie sur la largeur participante b_eff = ${fmtN(g.beff)} mm.`);
-      }
-    }
-    if (!G.mono) R.info.push(`Feuilleté : h_ef;w = ${fmtN(G.hw, 2)} mm pour la flèche, h_ef;σ = ${G.hs.map((x) => fmtN(x, 2)).join(' / ')} mm pour les contraintes des plis 1 à ${G.plies.length} (ω = ${String(num(s.comp.w)).replace('.', ',')}).`);
-
-    // ---- grandes flèches (4 appuis simples ou 4 encastrements, pression uniforme), pour information
-    const yS = R.slsGov && R.slsGov.y, t = G.hw;
-    if (s.large && (c.id === 'c1' || c.id === 'c8') && s.load === 'uni') {
-      const tabs = LARGE[c.id === 'c1' ? 'ss' : 'fx'];
-      const tab = ratio >= tabs[tabs.length - 1].r ? tabs[tabs.length - 1] : tabs.reduce((m, x) => (Math.abs(x.r - ratio) < Math.abs(m.r - ratio) ? x : m));
-      const al = Uw.cs.a.v, be = Object.keys(Uw.cs).filter((k) => k[0] === 'b').reduce((m, k) => Math.max(m, Math.abs(Uw.cs[k].v)), 0);
-      const one = (qkPa) => { const Q = qkPa / 1000 * b ** 4 / (E * t ** 4), L2 = largeDefl(tab, al, be, Q); return { Q, y: L2.w * t, s: L2.s * E * t * t / (b * b), out: Q > LD_Q[LD_Q.length - 1] }; };
-      R.large = { uls: one(ug ? ug.val : 0), sls: one(R.slsGov.val), slsAll: R.slsCases.map((x) => one(x.val)), where: tab.where, table: tab.label || String(tab.r).replace('.', ',') };
-      if (R.large.sls.y / t > 0.5) R.info.push(`Flèche ELS supérieure à t/2 : l'effet membrane réduit la flèche à ${fmtN(R.large.sls.y, 1)} mm si les bords sont retenus dans leur plan (§ 11.11).`);
-    } else if (yS && Math.abs(yS.v) > 0.5 * t && !c.strip) R.info.push('Flèche supérieure à t/2 : la théorie linéaire surestime flèche et contraintes (effet membrane négligé, § 11.11), ce qui va dans le sens de la sécurité.');
-
-    R.max = R.checks.reduce((m, x) => Math.max(m, x.r), 0);
-    R.gov = R.checks.reduce((gv, x) => (!gv || x.r > gv.r ? x : gv), null);
-    R.status = R.oor ? 'oor' : R.max <= 1 ? 'ok' : 'ko';
-    return R;
-  }
-  function fmtN(x, d = 0) { return Number(x).toLocaleString('fr-FR', { maximumFractionDigits: d }); }
-
-  function compLabel(st) {
-    const cp = st.comp || {};
-    if (cp.mode !== 'feuillete') return `${fmtN(num(cp.t), 1)} mm ${(GL.TEMPER[cp.temper] || GL.TEMPER.trempe).short}`;
-    const pl = (cp.plies || []).filter((p) => num(p.h) > 0);
-    const same = pl.every((p) => p.temper === pl[0].temper);
-    return `feuilleté ${pl.map((p) => fmtN(num(p.h), 1) + (same ? '' : ' ' + (GL.TEMPER[p.temper] || GL.TEMPER.trempe).short)).join(' / ')}${same && pl[0] ? ' ' + (GL.TEMPER[pl[0].temper] || GL.TEMPER.trempe).short : ''} (int. ${fmtN(num(cp.hint), 2)} mm, ω = ${fmtN(num(cp.w), 2)})`;
-  }
-
-  function summary(st) {
-    try {
-      const R = compute(st), c = CASE[st.cas];
-      return { type: 'Vitrage', sec: `${num(st.a)} × ${num(st.b)} mm · ${compLabel(st)} · ${c ? c.label : ''}`, gov: !R.valid ? 'Données invalides' : R.oor ? 'Hors domaine du tableau de Roark' : R.gov ? R.gov.label.replace(/\s*\(.*$/, '') : '', max: R.valid && !R.oor ? R.max : null };
-    } catch (e) { return null; }
-  }
-
-  window.LaminaRoark = { CASES, CASE, GROUPS, LARGE, LD_Q, coef, largeDefl, evalPlate, evalStrip, beam, compute, composition, compLabel, defaultState, upgrade, summary, valKey, valUnit, num, gRefOf, fdDefl };
+  window.LaminaRoark = { CASES, CASE, GROUPS, LARGE, LD_Q, coef, largeDefl, evalPlate, evalStrip, beam, gRefOf, fdDefl, valKey, valUnit, num };
 })();

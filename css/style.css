@@ -384,3 +384,7 @@ ol.audit li b.sev.l { background: var(--paper-2); }
 .pl-badge.s { background: #c0392b; } .pl-badge.y { background: var(--ok); } .pl-badge.R { background: var(--c-orange); }
 .pl-tab { margin-top: 18px; font-size: 13px; } .pl-tab summary { cursor: pointer; font-weight: 700; }
 .pl-tab th.hl, .pl-tab td.hl { background: var(--c-sun); }
+/* Pré-dimensionnement : tableau des cas de charge */
+.pd-grid td .na { color: var(--muted); padding: 0 6px; font-size: 12px; }
+.pd-grid select { padding: 5px 6px; font-size: 12.5px; border-color: var(--line); }
+.pd-grid td.ro { white-space: nowrap; }
