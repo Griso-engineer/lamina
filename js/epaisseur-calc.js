@@ -13,14 +13,17 @@
 
   function defaultState() {
     return {
-      v: 1, kind: 'epaisseur', name: 'Feuilleté F1',
+      v: 2, kind: 'epaisseur', name: 'Feuilleté F1',
       plies: [{ h: 8 }, { h: 8 }, { h: 8 }], hints: [1.52, 1.52],
       ref: 'geo', il: 'sg', pos: 'ext', wc: { G: 0, A: 0, W: 0.3, H: 0, E: 0, Ej: 0, S: 0 },
       E: 70000, nu: 0.23,
-      eet: { on: true, cas: 'ss4', a: 1500, b: 3000, L: 2000, psi: '', kind: 'plate', gSrc: 'il', load: 'W', G: 50 }
+      eet: { on: true, cas: 'ss4', a: 1500, b: 3000, L: 2000, psi: '', kind: 'plate', gSrc: 'il', load: 'W', G: '' }
     };
   }
   function upgrade(s) {
+    // v1 : G valait 50 MPa par défaut, utilisé à tort pour les intercalaires sans G connu (PVB…) : on vide ce défaut
+    if ((s.v || 1) < 2 && s.eet && num(s.eet.G) === 50 && s.eet.gSrc !== 'custom') s.eet.G = '';
+    s.v = 2;
     const d = defaultState();
     (function merge(dst, src) {
       Object.keys(src).forEach((k) => {
@@ -91,16 +94,15 @@
       } else psi = num(ee.psi) * 1e-6;
       let G = NaN, gTxt = '';
       if (ee.gSrc !== 'custom' && il.G) { G = GL.pick(il.G[ee.load], pos); gTxt = `${il.label}, ${(GL.LOADS.find((x) => x.id === ee.load) || {}).label || ''} (${il.src})`; }
-      else { G = num(ee.G); gTxt = 'saisi'; }
+      else { const gIn = String(ee.G == null ? '' : ee.G).trim(); G = gIn === '' ? NaN : num(gIn, NaN); gTxt = 'saisi'; }
       R.eet = { case: C, kind, psi, psiInfo, G, gTxt };
       if (!(psi > 0)) R.eet.err = 'Ψ non défini (dimensions ou valeur saisie).';
-      else if (!(G >= 0)) R.eet.err = 'Module de cisaillement G non défini.';
+      else if (!(G >= 0)) R.eet.err = 'Module de cisaillement G de l’intercalaire à saisir (fiche technique ou DTA du produit, à la température et pour la durée de la combinaison).';
       else {
         const et = GL.etaEET(g, G, psi, kind, E, nu);
         if (et.err) R.eet.err = et.err;
         else Object.assign(R.eet, et, GL.effectiveEET(g, et.eta));
       }
-      if (ee.gSrc !== 'custom' && !il.G) R.info.push(`EET : le référentiel « ${il.label} » ne donne pas de module G ; valeur saisie utilisée.`);
     }
 
     R.info.push('Méthode simplifiée de NF EN 16612 : vitrages supportés linéairement sous charges uniformément réparties ; elle peut sous-estimer contraintes et flèches pour les petits vitrages et les surestimer pour les grands.');

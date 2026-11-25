@@ -18,7 +18,7 @@
 <script src="js/glass.js?v=ed226cb4"></script>
 <script src="js/roark-calc.js?v=ef057801"></script>
 <script src="js/audit.js?v=39f44ffb"></script>
-<script src="js/epaisseur-calc.js?v=4891046c"></script>
+<script src="js/epaisseur-calc.js?v=80e16e8f"></script>
 <script src="js/predim-calc.js?v=13fdf221"></script>
 <script src="js/resistance-calc.js?v=36ea8f08"></script>
 <script>
@@ -106,6 +106,7 @@
   check('FD P78-468 tableau 32, PVB, composant intérieur : ω neige = 0', Ep.rows.find((r) => r.L.id === 'S').w, 0);
   check('FD P78-468 tableau 32, PVB : ω vent = 0,3', Ep.rows.find((r) => r.L.id === 'W').w, 0.3);
   check('DTA SentryGlas Xtra : ω été ≤ 50 °C joint = 0,85', GL.pick(GL.INTERLAYER.sgx.w.Ej, 'ext'), 0.85);
+const pv = LaminaEpaisseur.defaultState(); pv.il = 'pvb';  check('PVB sans G saisi : méthode EET sans résultat (G à saisir)', LaminaEpaisseur.compute(pv).eet.err ? 1 : 0, 1);  pv.eet.G = 0.5; check('PVB avec G = 0,5 MPa saisi : η = G/(G + G*)', LaminaEpaisseur.compute(pv).eet.eta > 0 && LaminaEpaisseur.compute(pv).eet.eta < 1 ? 1 : 0, 1);  const v1e = LaminaEpaisseur.upgrade({ v: 1, il: 'pvb', plies: [{ h: 8 }, { h: 8 }], hints: [1.52], eet: { on: true, cas: 'ss4', a: 1500, b: 3000, gSrc: 'il', load: 'W', G: 50 } });  check('ancien état : G = 50 MPa par défaut vidé', v1e.eet.G === '' ? 1 : 0, 1);
 
   // ------------------------------------------------------------------
   title('D · « Glass Strength Spreadsheet » (prEN 16612) — 50 ans, float, durci, trempe horizontale');

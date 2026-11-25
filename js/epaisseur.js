@@ -84,7 +84,7 @@
         ${field('Charge et appuis', sel('eet.cas', C.EET_CASES.map((x) => [x.id, x.label]), { rr: true }), '', '', true)}
         ${EC.id === 'ss4' ? `${field('Côté a', inp('eet.a'), 'mm')}${field('Côté b', inp('eet.b'), 'mm')}` : EC.id === 'bss' ? field('Portée L', inp('eet.L'), 'mm') : `${field('Ψ', inp('eet.psi'), 'mm⁻²·10⁶', 'valeur lue dans les tableaux A.1 ou A.2')}${field('Formule de η', sel('eet.kind', [['plate', 'Plaque — (A.4), (A.7)'], ['beam', 'Poutre — (A.8), (A.9)']]))}`}
         ${field('Module de cisaillement G', sel('eet.gSrc', [['il', il && il.G ? `${il.label} — ${il.src}` : 'Non fourni pour cet intercalaire — G saisi'], ['custom', 'Saisi']], { rr: true }))}
-        ${st.eet.gSrc === 'il' && il && il.G ? field('Cas de charge', sel('eet.load', loadsG.map((L) => [L.id, L.label]), { rr: true })) : field('G', inp('eet.G'), 'MPa')}
+        ${st.eet.gSrc === 'il' && il && il.G ? field('Cas de charge', sel('eet.load', loadsG.map((L) => [L.id, L.label]), { rr: true })) : field('G', inp('eet.G', { ph: 'à saisir' }), 'MPa', il && il.G ? '' : 'aucune valeur de G dans FD P78-468 pour cet intercalaire')}
         ${EC.kind !== 'beam' ? field('Module E / ν', `<div class="inline">${inp('E')}${inp('nu')}</div>`, 'MPa / —') : field('Module E', inp('E'), 'MPa')}
       </div><div id="eEet" style="margin-top:14px"></div>` : ''}
       <div id="eNotes"></div>
