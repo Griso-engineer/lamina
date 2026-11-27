@@ -20,11 +20,13 @@ Firmitas (onglets de calcul, projets dans le navigateur, fiche NDC en PDF ou Wor
     rigidité de poutre E·h³/12 ou de plaque E·h³/12(1 − ν²) ; flèche par intégration exacte.
   - *Flèche* : critère FD P78-468 § 10.5 (4 côtés : min(a, b)/60 ≤ 30 mm ; 2 ou 3 côtés : b/100 ou b/150 en
     vitrage isolant, ≤ 50 mm) ou limite et plafond saisis par ligne ; ν = 0,23 par défaut.
-  - *Visualisation* d'un cas choisi : ELU — contrainte principale maximale en élévation (bleu → rouge) et
-    répartition de la contrainte sur l'épaisseur ; ELS — déformée hors plan en élévation. Plaques : méthode de
+  - *Visualisation* d'un cas choisi, en vue 3D orientable (glisser, molette, double-clic ; js/view3d.js) : ELU —
+    contrainte principale maximale sur la déformée (bleu → rouge) et répartition sur l'épaisseur ; ELS — déformée
+    hors plan. Plaques : méthode de
     Ritz (plaque de Kirchhoff, js/plate-ritz.js, recoupée avec Roark) ; bandes et consoles : solution de poutre.
   - Les calculs enregistrés avec l'ancien onglet « Roark » sont convertis (h et f_g;d recalculés par ligne).
-- **Résistance** : f_g;d pour toutes les durées de charge (tableau 25 de FD P78-468 et durées cumulées) et tous
+- **Résistance** : f_g;d pour toutes les durées de charge (tableau 25 de FD P78-468, tableau A.3 de NF EN 19100-1
+  pour les charges d'exploitation, d'entretien et de foule sur garde-corps, et durées cumulées) et tous
   les traitements (recuit, durci, trempé, trempé chimiquement) ; coefficients γ au choix FD P78-468 (France,
   1,5 / 1,5, par défaut) ou NF EN 16612 (1,8 / 1,2) ; k_sp selon la surface, k_e (verre recuit seulement selon
   FD P78-468), k_v.

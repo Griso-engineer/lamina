@@ -392,3 +392,5 @@ ol.audit li b.sev.l { background: var(--paper-2); }
 .pd-grid thead tr.grp th[rowspan] { background: transparent; vertical-align: bottom; border-bottom: 1px solid var(--rule); font-size: 11.5px; text-transform: none; letter-spacing: 0; }
 .pd-viz { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 24px 36px; align-items: start; }
 @media (max-width: 980px) { .pd-viz { grid-template-columns: minmax(0, 1fr); } }
+.pd-3d { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 10px; align-items: center; border: 1px solid var(--line); background: linear-gradient(#fbfbfa, #f1f3f6); padding: 6px; }
+.pd-3d canvas { width: 100%; height: 420px; display: block; }

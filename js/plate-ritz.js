@@ -130,7 +130,9 @@
       fine.forEach((row) => row.forEach((p) => { if (Math.abs(p.w) > Math.abs(wMax.v)) wMax = { v: p.w, x: p.x, y: p.y }; if (p.smax > sMax.v) sMax = { v: p.smax, x: p.x, y: p.y, p }; }));
       return { cells, wMax, sMax };
     }
-    return { at, grid, D, N };
+    // valeurs aux sommets d'un maillage de nx × ny quadrilatères (vue 3D)
+    const nodes = (nx, ny) => field(Array.from({ length: nx + 1 }, (_, i) => i / nx * a), Array.from({ length: ny + 1 }, (_, j) => j / ny * b));
+    return { at, grid, nodes, D, N };
   }
 
   window.LaminaRitz = { solve, gauss, legendre };

@@ -105,7 +105,7 @@
       if (wBox.dataset.key !== key) {
         wBox.dataset.key = key;
         const rows = loads.map((V) => `<tr${V.key === 'W' ? ' class="gov"' : ''}><td>${sub(V.label)}</td><td class="f">${esc(V.L.dur)}</td><td class="num">${custom ? `<input type="number" step="any" data-ep="wc.${V.id}" value="${esc(st.wc[V.id] != null ? st.wc[V.id] : '')}" placeholder="—" style="max-width:80px">` : `<span id="eW_${V.key}"></span>`}</td><td class="num"><b id="eHw_${V.key}"></b></td>${g.h.map((_, k) => `<td class="num" id="eHs_${V.key}_${k}"></td>`).join('')}<td class="num"><b id="eHsm_${V.key}"></b></td></tr>`).join('');
-        wBox.innerHTML = `<div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>Cas de charge (charge de plus courte durée)</th><th>Durée</th><th class="num">ω</th><th class="num">h<sub>ef;w</sub></th>${g.h.map((h, k) => `<th class="num">h<sub>ef;σ,${k + 1}</sub><br><small>pli ${k + 1}</small></th>`).join('')}<th class="num">h<sub>ef;σ</sub> min</th></tr></thead><tbody>${rows}</tbody></table></div><p class="cap" id="eWcap"></p>`;
+        wBox.innerHTML = `<div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>Cas de charge (charge de plus courte durée)</th><th>Durée</th><th class="num">ω [–]</th><th class="num">h<sub>ef;w</sub> [mm]</th>${g.h.map((h, k) => `<th class="num">h<sub>ef;σ,${k + 1}</sub> [mm]<br><small>pli ${k + 1}</small></th>`).join('')}<th class="num">h<sub>ef;σ</sub> min [mm]</th></tr></thead><tbody>${rows}</tbody></table></div><p class="cap" id="eWcap"></p>`;
       }
       const T = (id, v) => { const e = $('#' + id); if (e) e.textContent = v; };
       loads.forEach((V) => {
@@ -152,7 +152,7 @@
         ${kv('Distances h<sub>m</sub>', g.hm.map((x) => fmt(x, 2)).join(' / ') + ' mm')}
       </div></div></div>
       ${H2('Méthode ω — NF EN 16612 annexe D')}
-      <table><thead><tr><th>Cas de charge</th><th>Durée</th><th class="num">ω</th><th class="num">h<sub>ef;w</sub></th>${g.h.map((_, k) => `<th class="num">h<sub>ef;σ,${k + 1}</sub></th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
+      <table><thead><tr><th>Cas de charge</th><th>Durée</th><th class="num">ω [–]</th><th class="num">h<sub>ef;w</sub> [mm]</th>${g.h.map((_, k) => `<th class="num">h<sub>ef;σ,${k + 1}</sub> [mm]</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
       <p style="font-size:7.6pt;color:#555">Épaisseurs en mm. h<sub>ef;w</sub> = (Σh<sub>k</sub>³ + 12·ω·Σh<sub>k</sub>·h<sub>m,k</sub>²)<sup>1/3</sup> ; h<sub>ef;σ,j</sub> = √(h<sub>ef;w</sub>³/(h<sub>j</sub> + 2·ω·h<sub>m,j</sub>)). Pour une combinaison, ω de la charge de plus courte durée (FD P78-468 § 10.6.2).</p>
       ${E && !E.err ? `${H2('Méthode EET — EN 19100-2 annexe A')}<div class="rp-kv">${kv('Cas', sub(E.case.label))}${kv('Ψ', `${fmtG(E.psi * 1e6, 4)}·10⁻⁶ mm⁻²`)}${kv('G intercalaire', `${fmtG(E.G, 2)} MPa (${esc(E.gTxt)})`)}${kv('η ' + esc(E.formula || ''), fmt(E.eta, 3))}${kv('h<sub>ef;w</sub>', fmt(E.hw, 2) + ' mm')}${kv('h<sub>ef;σ</sub>', E.hs.map((x) => fmt(x, 2)).join(' / ') + ' mm')}${kv('ω équivalent (A.1)', fmt(E.w, 3))}</div>` : ''}
       ${R.info.length || R.warnings.length ? `<p style="font-size:7.6pt"><b>Remarques :</b> ${R.warnings.concat(R.info).map(sub).join(' ')}</p>` : ''}

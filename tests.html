@@ -15,13 +15,13 @@
 <p>Moteur comparé aux classeurs d'origine (valeurs non concernées par les corrections), aux formules fermées de la RDM et aux cas limites du feuilleté.</p>
 <div id="sum"></div>
 <div id="out"></div>
-<script src="js/glass.js?v=800676c3"></script>
+<script src="js/glass.js?v=eeabc458"></script>
 <script src="js/roark-calc.js?v=ef057801"></script>
 <script src="js/audit.js?v=39f44ffb"></script>
 <script src="js/epaisseur-calc.js?v=d1d346e8"></script>
-<script src="js/plate-ritz.js?v=6fff1ec6"></script>
+<script src="js/plate-ritz.js?v=825bff98"></script>
 <script src="js/predim-calc.js?v=12449c1a"></script>
-<script src="js/resistance-calc.js?v=36ea8f08"></script>
+<script src="js/resistance-calc.js?v=3fd2a163"></script>
 <script>
 (function () {
   const C = LaminaRoark, GL = LaminaGlass, AU = LaminaAudit;
@@ -144,6 +144,10 @@ const pv = LaminaEpaisseur.defaultState(); pv.il = 'pvb';  check('PVB sans G sai
   const rs = RS.compute(RS.defaultState()), rW = rs.rows.find((r) => r.dur.id === 'fdW');
   check('onglet Résistance (FD P78-468) : trempé, vent 3 s = 80,0', rW.vals.trempe.v, 80, 1e-9);
   check('onglet Résistance : recuit, poids propre 50 ans = 8,7', rs.rows.find((r) => r.dur.id === 'fdG').vals.recuit.v, 8.7, 1e-3);
+  const rq = (id) => rs.rows.find((r) => r.dur.id === id);
+  check('EN 19100-1 tableau A.3 : charge d’exploitation (1 semaine) k_mod = 0,45 → trempé 0,45·45/1,5 + 75/1,5', rq('ecQ').vals.trempe.v, 0.45 * 30 + 50, 1e-9);
+  check('EN 19100-1 tableau A.3 : garde-corps, foule (5 min) k_mod = 0,77 → recuit 0,77·45/1,5', rq('ecF').vals.recuit.v, 0.77 * 30, 1e-9);
+  check('EN 19100-1 tableau A.3 : garde-corps, service ordinaire (30 s) k_mod = 0,89', rq('ecP').kmod, 0.89);
   const rsEn = RS.defaultState(); rsEn.gRef = 'en'; rsEn.gMA = 1.8; rsEn.gMv = 1.2;
   check('onglet Résistance (NF EN 16612) : trempé, vent 3 s = 25 + 62,5', RS.compute(rsEn).rows.find((r) => r.dur.id === 'fdW').vals.trempe.v, 45 / 1.8 + 75 / 1.2);
   check('onglet Résistance : durcis émaillés sans f_b;k chimique → « non disponible »', (() => { const s = RS.defaultState(); s.surface = 'emaille'; return RS.compute(s).rows[0].vals.chimique === null ? 1 : 0; })(), 1);

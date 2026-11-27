@@ -39,7 +39,7 @@
       const kmod = d.kmod != null ? d.kmod : GL.kmodOf(d.h);
       const vals = {};
       GL.TEMPERS.forEach((t) => { const f = GL.fgd(p, t.id, kmod); vals[t.id] = f.available ? f : null; });
-      return { dur: d, kmod, vals, fd: !!d.fd };
+      return { dur: d, kmod, vals, fd: !!d.fd, ec10: !!d.ec10 };
     });
     R.sf = sf; R.p = p;
     if (s.gRef === 'fd' && p.ke !== 1) R.info.push('FD P78-468 : k_e ne s’applique qu’au verre recuit (équations 11 et 12) ; il est sans effet sur les verres précontraints.');

@@ -89,46 +89,30 @@
     return `rgb(${A1.map((v, k) => Math.round(v + (B1[k] - v) * f)).join(',')})`;
   }
   const RITZ_LOAD = { uni: 'uni', conc: 'point', lin: 'linx', lin2: 'liny', tri: 'triy' };
-  /* Champ d'une ligne : plaques par Ritz, bandes et consoles par la solution de poutre (uniforme sur la largeur). */
-  function fieldOf(R, o, nx = 64) {
+  /* Champ d'une ligne aux sommets d'un maillage nx × ny : plaques par Ritz, bandes et consoles par la solution
+     de poutre (uniforme sur la largeur). Retourne nodes [[{w, s}]] (y croissant), extrema de |σ| et de w. */
+  function fieldOf(R, o, nx = 44) {
     const g = R.geo, c = R.case;
-    const ny = Math.max(8, Math.round(nx * g.b / g.a));
+    const ny = Math.max(10, Math.round(nx * g.b / g.a));
     if (c.strip) {
-      const B = o.beam, L = g.b, k = 6 / (o.h * o.h);
-      const sAt = (z) => k * Math.abs(B.m(z)), yAt = (z) => B.yAt(z);
-      const cells = [];
-      for (let iy = 0; iy < ny; iy++) { const z = (iy + 0.5) / ny * L, p = { w: yAt(z), smax: sAt(z) }; cells.push(new Array(nx).fill(p)); }
+      const B = o.beam, L = g.b, k = 6 / (o.h * o.h), nodes = [];
+      for (let j = 0; j <= ny; j++) { const z = j / ny * L, p = { w: B.yAt(z), s: k * Math.abs(B.m(z)) }; nodes.push(new Array(nx + 1).fill(p)); }
       let iS = 0, iY = 0; B.xs.forEach((z, i) => { if (Math.abs(B.ms[i]) > Math.abs(B.ms[iS])) iS = i; if (Math.abs(B.ys[i]) > Math.abs(B.ys[iY])) iY = i; });
-      return { cells, nx, ny, sMax: { v: k * Math.abs(B.ms[iS]), x: g.a / 2, y: B.xs[iS] }, wMax: { v: B.ys[iY], x: g.a / 2, y: B.xs[iY] }, src: 'poutre' };
+      return { nodes, nx, ny, sMax: { v: k * Math.abs(B.ms[iS]), x: g.a / 2, y: B.xs[iS] }, wMax: { v: B.ys[iY], x: g.a / 2, y: B.xs[iY] } };
     }
     const RZ = window.LaminaRitz, key = RK.valKey(o.load);
     const S = RZ.solve({ a: g.a, b: g.b, E: g.E, nu: g.nu, h: o.h, edges: c.edges, load: RITZ_LOAD[o.load] || 'uni', q: key === 'q' ? o.val / 1000 : 0, W: key === 'W' ? o.val * 1000 : 0, x0: g.a / 2, y0: g.b / 2, N: 11 });
     if (!S) return null;
-    const G = S.grid(nx, ny);
-    return { cells: G.cells, nx, ny, sMax: G.sMax, wMax: G.wMax, src: 'ritz' };
+    const G = S.grid(48, Math.max(12, Math.round(48 * g.b / g.a)));   // extrema sur grille fine, bords compris
+    const nodes = S.nodes(nx, ny).map((row) => row.map((p) => ({ w: p.w, s: p.smax })));
+    return { nodes, nx, ny, sMax: G.sMax, wMax: G.wMax };
   }
-  /* Carte colorée en élévation (bleu → rouge), appuis, échelle de couleurs, extremum repéré. */
-  function fieldMap(R, F, kind, W = 640) {
-    const g = R.geo, ml = 34, mt = 26, cbw = 96, k = Math.min((W - ml - cbw - 30) / g.a, 330 / g.b), w = g.a * k, h = g.b * k, H = h + mt + 64, x0 = ml, y0 = mt;
-    const val = (p) => (kind === 'w' ? Math.abs(p.w) : p.smax), vmax = kind === 'w' ? Math.abs(F.wMax.v) : F.sMax.v;
-    const cw = w / F.nx, ch = h / F.ny;
-    let s = '';
-    F.cells.forEach((row, iy) => row.forEach((p, ix) => { s += `<rect x="${(x0 + ix * cw).toFixed(2)}" y="${(y0 + h - (iy + 1) * ch).toFixed(2)}" width="${(cw + 0.6).toFixed(2)}" height="${(ch + 0.6).toFixed(2)}" fill="${cmap(vmax > 0 ? val(p) / vmax : 0)}"/>`; }));
-    s += edges4(R.case.edges, x0, y0, w, h);
-    const M = kind === 'w' ? F.wMax : F.sMax, mxp = x0 + M.x / g.a * w, myp = y0 + h - M.y / g.b * h;
-    const lab = kind === 'w' ? `w max = ${fmt(Math.abs(M.v), 2)} mm` : `σ max = ${fmt(M.v, 1)} MPa`;
-    s += `<circle cx="${mxp}" cy="${myp}" r="6" fill="none" stroke="#111" stroke-width="2"/><circle cx="${mxp}" cy="${myp}" r="2" fill="#111"/>`;
-    const tx = Math.min(Math.max(mxp, x0 + 70), x0 + w - 70), ty = myp > y0 + 22 ? myp - 12 : myp + 22;
-    s += `<text x="${tx}" y="${ty}" font-size="12.5" font-weight="800" text-anchor="middle" fill="#111" stroke="#fff" stroke-width="3.5" paint-order="stroke">${lab}</text>`;
-    // cotes discrètes
-    s += `<text x="${x0 + w / 2}" y="${y0 + h + 40}" font-size="11.5" text-anchor="middle" fill="${MUTED}">a = ${fmtG(g.a, 0)} mm</text><text x="${x0 - 22}" y="${y0 + h / 2}" font-size="11.5" text-anchor="middle" fill="${MUTED}" transform="rotate(-90 ${x0 - 22} ${y0 + h / 2})">b = ${fmtG(g.b, 0)} mm</text>`;
-    // échelle de couleurs
-    const cx = x0 + w + 40, cy0 = y0, chh = Math.max(140, h);
+  /* Échelle de couleurs verticale (bleu → rouge). */
+  function colorbar(vmax, unit, dec, H = 300) {
     let gr = ''; STOPS.forEach((col, i) => { gr += `<stop offset="${i / (STOPS.length - 1)}" stop-color="${col}"/>`; });
-    s += `<defs><linearGradient id="cb${kind}" x1="0" y1="1" x2="0" y2="0">${gr}</linearGradient></defs><rect x="${cx}" y="${cy0}" width="16" height="${chh}" fill="url(#cb${kind})" stroke="#999" stroke-width=".5"/>`;
-    [0, 0.25, 0.5, 0.75, 1].forEach((t) => { const yy = cy0 + chh * (1 - t); s += `<line x1="${cx + 16}" y1="${yy}" x2="${cx + 21}" y2="${yy}" stroke="#666"/><text x="${cx + 24}" y="${yy + 4}" font-size="10.5" fill="#333">${fmt(vmax * t, kind === 'w' ? 2 : 1)}</text>`; });
-    s += `<text x="${cx}" y="${cy0 - 9}" font-size="10.5" font-weight="700" fill="#333">${kind === 'w' ? 'w [mm]' : '|σ| [MPa]'}</text>`;
-    return `<svg viewBox="0 0 ${W} ${Math.max(H, chh + mt + 30)}" width="100%" style="max-width:${W}px;display:block" font-family="Inter, sans-serif">${s}</svg>`;
+    let s = `<defs><linearGradient id="cb3d" x1="0" y1="1" x2="0" y2="0">${gr}</linearGradient></defs><text x="0" y="12" font-size="11" font-weight="700" fill="#333">${unit}</text><rect x="0" y="22" width="16" height="${H - 44}" fill="url(#cb3d)" stroke="#999" stroke-width=".5"/>`;
+    [0, 0.25, 0.5, 0.75, 1].forEach((t) => { const yy = 22 + (H - 44) * (1 - t); s += `<line x1="16" y1="${yy}" x2="21" y2="${yy}" stroke="#666"/><text x="24" y="${yy + 4}" font-size="11" fill="#333">${fmt(vmax * t, dec)}</text>`; });
+    return `<svg viewBox="0 0 76 ${H}" width="76" height="${H}" font-family="Inter, sans-serif">${s}</svg>`;
   }
   /* Contrainte sur l'épaisseur au point dimensionnant : répartition linéaire de flexion sur h (traction / compression). */
   function thickness(o, W = 360, H = 320) {
@@ -152,25 +136,34 @@
     s += `<text x="${x0}" y="${bot + 30}" font-size="11" text-anchor="middle" fill="${MUTED}">épaisseur équivalente h = ${fmtG(o.h, 2)} mm · contraintes en MPa</text>`;
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:0 auto" font-family="Inter, sans-serif">${s}</svg>`;
   }
+  /* Contenu du bloc Visualisation et fonction de montage de la vue 3D (appelée une fois le HTML inséré). */
   function vizHtml(R) {
     const usable = R.rows.filter((o) => o.out && (!o.err || o.na));
-    if (!usable.length) return '<p class="note">Aucun cas calculable à visualiser.</p>';
+    if (!usable.length) return { html: '<p class="note">Aucun cas calculable à visualiser.</p>' };
     let o = R.rows[+st.viz];
     if (!o || !o.out || (o.err && !o.na)) o = R.gov || usable[0];
     const F = fieldOf(R, o);
-    if (!F) return '<p class="note warn">Champ non calculable pour ce cas.</p>';
+    if (!F) return { html: '<p class="note warn">Champ non calculable pour ce cas.</p>' };
     const plate = !R.case.strip, src = plate ? 'méthode de Ritz (plaque de Kirchhoff, ν = ' + fmtG(R.geo.nu, 2) + ')' : 'statique de poutre, répartition uniforme sur la largeur';
-    const nuNote = plate && o.L && o.L.nu != null && Math.abs(o.L.nu - R.geo.nu) > 0.02 ? ` L’écart vient surtout de ν (tables de Roark établies pour ν = ${String(o.L.nu).replace(".", ",")}).` : "";
-    if (o.st === 'uls') {
+    const nuNote = plate && o.L && o.L.nu != null && Math.abs(o.L.nu - R.geo.nu) > 0.02 ? ` L’écart vient surtout de ν (tables de Roark établies pour ν = ${String(o.L.nu).replace('.', ',')}).` : '';
+    const uls = o.st === 'uls', vmax = uls ? F.sMax.v : Math.abs(F.wMax.v);
+    const nodes = F.nodes.map((row) => row.map((p) => ({ w: p.w, v: uls ? p.s : Math.abs(p.w) })));
+    const label = uls ? `σ max = ${fmt(F.sMax.v, 1)} MPa` : `w max = ${fmt(Math.abs(F.wMax.v), 2)} mm`;
+    const view = `<div class="pd-3d"><canvas id="pV3d"></canvas>${colorbar(vmax, uls ? '|σ| [MPa]' : 'w [mm]', uls ? 1 : 2)}</div>`;
+    const mount = () => { const cv = $('#pV3d'); if (cv && window.LaminaView3D) window.LaminaView3D.mount(cv, { a: R.geo.a, b: R.geo.b, nodes, vmax, cmap, edges: R.case.edges, label, maxPt: uls ? F.sMax : F.wMax }); };
+    let html;
+    if (uls) {
       const cmp = plate ? ` Valeur de vérification (Roark, ${esc(o.gov.label.toLowerCase())}) : ${fmt(Math.abs(o.gov.v), 1)} MPa.${nuNote}` : '';
-      return `<div class="pd-viz"><div><div class="sub-title" style="margin-top:0">Contrainte en élévation</div>${fieldMap(R, F, 's')}
+      html = `<div class="pd-viz"><div><div class="sub-title" style="margin-top:0">Contrainte — vue 3D sur la déformée</div>${view}
           <p class="cap">Contrainte principale maximale en valeur absolue (face la plus tendue), ${src} : σ<sub>max</sub> = ${fmt(F.sMax.v, 1)} MPa.${cmp}${plate && o.load === 'conc' ? ' Charge concentrée : champ lissé près du point d’application.' : ''}</p></div>
         <div><div class="sub-title" style="margin-top:0">Contrainte sur l’épaisseur</div>${thickness(o)}
           <p class="cap">${sub(o.gov.label)} : répartition linéaire de la contrainte de flexion sur l’épaisseur équivalente h (MPa). Pour un feuilleté, la contrainte de chaque pli est celle de son h<sub>ef;σ</sub>.</p></div></div>`;
+    } else {
+      const cmp = o.na ? ' Roark ne donne pas la flèche pour ces appuis : valeur indicative, non vérifiée.' : plate ? ` Valeur de vérification (Roark) : ${fmt(o.Ed, 2)} mm.${nuNote}` : '';
+      html = `<div><div class="sub-title" style="margin-top:0">Déformée hors plan — vue 3D</div>${view}
+        <p class="cap">Flèche hors plan w, ${src} : w<sub>max</sub> = ${fmt(Math.abs(F.wMax.v), 2)} mm.${cmp}</p></div>`;
     }
-    const cmp = o.na ? ' Roark ne donne pas la flèche pour ces appuis : valeur indicative, non vérifiée.' : plate ? ` Valeur de vérification (Roark) : ${fmt(o.Ed, 2)} mm.${nuNote}` : '';
-    return `<div><div class="sub-title" style="margin-top:0">Déformée hors plan en élévation</div>${fieldMap(R, F, 'w', 720)}
-      <p class="cap">Flèche hors plan w, ${src} : w<sub>max</sub> = ${fmt(Math.abs(F.wMax.v), 2)} mm.${cmp}</p></div>`;
+    return { html, mount };
   }
 
   // ======================================================================
@@ -239,7 +232,7 @@
   let vizT = null;
   function refreshViz(R) {
     clearTimeout(vizT);
-    vizT = setTimeout(() => { const el = $('#pViz'); if (el) el.innerHTML = R.valid ? vizHtml(R) : ''; }, 120);
+    vizT = setTimeout(() => { const el = $('#pViz'); if (!el) return; if (!R.valid) { el.innerHTML = ''; return; } const V = vizHtml(R); el.innerHTML = V.html; if (V.mount) V.mount(); }, 120);
   }
 
   function refresh() {

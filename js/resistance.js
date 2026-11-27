@@ -25,9 +25,10 @@
     const T = GL.TEMPERS;
     const row = (r) => `<tr${r.dur.id === 'fdW' ? ' class="gov"' : ''}><td>${sub(r.dur.label)}</td><td class="num">${fmt(r.kmod, 2)}</td>${T.map((t) => `<td class="num">${r.vals[t.id] ? `<b>${fmt(r.vals[t.id].v)}</b>` : '<span class="muted">—</span>'}</td>`).join('')}</tr>`;
     const head = `<tr><th>Durée de charge</th><th class="num">k<sub>mod</sub></th>${T.map((t) => `<th class="num">${esc(t.label)} [MPa]</th>`).join('')}</tr>`;
-    const fd = R.rows.filter((r) => r.fd), other = R.rows.filter((r) => !r.fd);
+    const fd = R.rows.filter((r) => r.fd), ec = R.rows.filter((r) => r.ec10), other = R.rows.filter((r) => !r.fd && !r.ec10);
     return `<div class="tbl-wrap"><table class="${cls || 'tbl'}"><thead>${head}</thead><tbody>
       <tr><td colspan="${T.length + 2}" class="f"><b>Charges du tableau 25 de FD P78-468</b> (k<sub>mod</sub> forfaitaire)</td></tr>${fd.map(row).join('')}
+      <tr><td colspan="${T.length + 2}" class="f"><b>Charges du tableau A.3 de NF EN 19100-1 (Eurocode 10)</b> (k<sub>mod</sub> forfaitaire, dont charges d’exploitation et de foule)</td></tr>${ec.map(row).join('')}
       <tr><td colspan="${T.length + 2}" class="f"><b>Durées cumulées</b> (k<sub>mod</sub> = 0,663·t<sup>−1/16</sup>, NF EN 16612)</td></tr>${other.map(row).join('')}
     </tbody></table></div>`;
   }
