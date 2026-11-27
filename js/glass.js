@@ -183,7 +183,20 @@
     { id: 'custom', label: 'ω saisis', src: 'saisie', w: {} }
   ];
   const INTERLAYER = Object.fromEntries(INTERLAYERS.map((x) => [x.id, x]));
-  const pick = (v, pos) => (v && typeof v === 'object' ? v[pos] : v);
+  const pick = (v, pos) => (v && typeof v === 'object' ? v[pos || 'ext'] : v);
+  /* Cas de charge d'un intercalaire, dédoublés quand ω (ou G) dépend de la position dans un vitrage isolant. */
+  const POS = { ext: 'vitrage simple ou composant extérieur d’un VI', int: 'composant intérieur d’un VI' };
+  function loadVariants(il, tab = 'w') {
+    const src = il[tab] || {}, out = [];
+    LOADS.forEach((L) => {
+      const v = src[L.id];
+      if (v === undefined) return;
+      if (v && typeof v === 'object') Object.keys(POS).forEach((p) => out.push({ key: L.id + '_' + p, id: L.id, pos: p, L, label: `${L.label} — ${POS[p]}`, dur: L.dur }));
+      else out.push({ key: L.id, id: L.id, pos: null, L, label: L.label, dur: L.dur });
+    });
+    return out;
+  }
+  const splitKey = (key) => { const [id, pos] = String(key || '').split('_'); return { id, pos: pos || 'ext' }; };
 
-  window.LaminaGlass = { E, NU, RHO, GAMMAS, TEMPERS, TEMPER, SURFACES, SURFACE, DURATIONS, DURATION, kmodOf, fgd, geometry, effective, etaEET, effectiveEET, psiPlateSS4, PSI_SS4, LOADS, INTERLAYERS, INTERLAYER, pick, num };
+  window.LaminaGlass = { E, NU, RHO, GAMMAS, TEMPERS, TEMPER, SURFACES, SURFACE, DURATIONS, DURATION, kmodOf, fgd, geometry, effective, etaEET, effectiveEET, psiPlateSS4, PSI_SS4, LOADS, INTERLAYERS, INTERLAYER, pick, loadVariants, splitKey, num };
 })();

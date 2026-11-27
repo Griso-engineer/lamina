@@ -15,12 +15,15 @@
     return {
       v: 2, kind: 'epaisseur', name: 'Feuilleté F1',
       plies: [{ h: 8 }, { h: 8 }, { h: 8 }], hints: [1.52, 1.52],
-      ref: 'geo', il: 'sg', pos: 'ext', wc: { G: 0, A: 0, W: 0.3, H: 0, E: 0, Ej: 0, S: 0 },
+      il: 'sg', wc: { G: 0, A: 0, W: 0.3, H: 0, E: 0, Ej: 0, S: 0 },
       E: 70000, nu: 0.23,
       eet: { on: true, cas: 'ss4', a: 1500, b: 3000, L: 2000, psi: '', kind: 'plate', gSrc: 'il', load: 'W', G: '' }
     };
   }
   function upgrade(s) {
+    // plan de référence et position supprimés (cas dédoublés extérieur / intérieur)
+    if (s.eet && s.pos && /^(S|H)$/.test(s.eet.load)) s.eet.load += '_' + s.pos;
+    delete s.ref; delete s.pos;
     // v1 : G valait 50 MPa par défaut, utilisé à tort pour les intercalaires sans G connu (PVB…) : on vide ce défaut
     if ((s.v || 1) < 2 && s.eet && num(s.eet.G) === 50 && s.eet.gSrc !== 'custom') s.eet.G = '';
     s.v = 2;
@@ -57,28 +60,23 @@
     if (!(E > 0)) bad.push('module E');
     if (!(nu >= 0 && nu < 0.5)) bad.push('coefficient de Poisson');
     if (bad.length) { R.valid = false; R.warnings.push('Données invalides : ' + bad.join(', ') + '.'); return R; }
-    const g = GL.geometry(plies, hints, s.ref);
-    const alt = GL.geometry(plies, hints, s.ref === 'cg' ? 'geo' : 'cg');
+    const g = GL.geometry(plies, hints, 'geo');   // distances depuis le plan de symétrie du feuilleté (NF EN 16612 annexe D)
     R.g = g; R.n = g.n;
     if (g.n === 1) R.info.push('Un seul pli : verre monolithique, h_ef = h.');
 
     // ---- NF EN 16612 annexe D avec ω par cas de charge
-    const il = GL.INTERLAYER[s.il] || GL.INTERLAYER.pvb, pos = s.pos === 'int' ? 'int' : 'ext';
-    R.il = il; R.pos = pos;
-    R.rows = GL.LOADS.map((L) => {
-      let w = il.id === 'custom' ? (s.wc && s.wc[L.id] !== undefined && String(s.wc[L.id]).trim() !== '' ? num(s.wc[L.id]) : undefined) : GL.pick(il.w[L.id], pos);
+    const il = GL.INTERLAYER[s.il] || GL.INTERLAYER.pvb;
+    R.il = il;
+    // cas de charge (dédoublés extérieur / intérieur quand ω dépend de la position dans un vitrage isolant)
+    const vars = il.id === 'custom' ? GL.LOADS.filter((L) => !/50/.test(L.id)).map((L) => ({ key: L.id, id: L.id, pos: null, L, label: L.label, dur: L.dur })) : GL.loadVariants(il, 'w');
+    R.vars = vars;
+    R.rows = vars.map((V) => {
+      const w = il.id === 'custom' ? (s.wc && s.wc[V.id] !== undefined && String(s.wc[V.id]).trim() !== '' ? num(s.wc[V.id]) : undefined) : GL.pick(il.w[V.id], V.pos);
       if (w === undefined) return null;
-      const e = GL.effective(plies, hints, w, s.ref), ea = GL.effective(plies, hints, w, alt.ref);
-      return { L, w, hw: e.hw, hs: e.hs, hsMin: Math.min(...e.hs), alt: { hw: ea.hw, hs: ea.hs } };
+      const e = GL.effective(plies, hints, w, 'geo');
+      return { L: V.L, key: V.key, label: V.label, w, hw: e.hw, hs: e.hs, hsMin: Math.min(...e.hs) };
     }).filter(Boolean);
     if (R.rows.some((r) => !(r.w >= 0 && r.w <= 1))) { R.valid = false; R.warnings.push('Données invalides : ω doit être compris entre 0 et 1.'); return R; }
-
-    // écart entre les deux conventions de plan de référence (compositions dissymétriques)
-    if (!g.sym && g.n > 1) {
-      const dev = R.rows.reduce((m, r) => Math.max(m, Math.abs(r.alt.hw / r.hw - 1), ...r.hs.map((x, k) => Math.abs(r.alt.hs[k] / x - 1))), 0);
-      R.asym = dev;
-      R.info.push(`Composition dissymétrique : le plan de symétrie du feuilleté et le centre de gravité du verre sont distants de ${fmtN(Math.abs(g.zg - g.zc), 2)} mm ; écart maximal entre les deux conventions sur les épaisseurs effectives : ${fmtN(dev * 100, 1)} %.`);
-    }
 
     // ---- EN 19100-2 annexe A (EET)
     const ee = s.eet || {};
@@ -93,7 +91,7 @@
         if (L > 0) { psi = 168 / (17 * L * L); psiInfo = `L = ${fmtN(L)} mm`; }
       } else psi = num(ee.psi) * 1e-6;
       let G = NaN, gTxt = '';
-      if (ee.gSrc !== 'custom' && il.G) { G = GL.pick(il.G[ee.load], pos); gTxt = `${il.label}, ${(GL.LOADS.find((x) => x.id === ee.load) || {}).label || ''} (${il.src})`; }
+      if (ee.gSrc !== 'custom' && il.G) { const k = GL.splitKey(ee.load), V = GL.loadVariants(il, 'G').find((x) => x.key === ee.load) || GL.loadVariants(il, 'G').find((x) => x.id === k.id); G = GL.pick(il.G[k.id], k.pos); gTxt = `${il.label}, ${V ? V.label.toLowerCase() : ''} (${il.src})`; }
       else { const gIn = String(ee.G == null ? '' : ee.G).trim(); G = gIn === '' ? NaN : num(gIn, NaN); gTxt = 'saisi'; }
       R.eet = { case: C, kind, psi, psiInfo, G, gTxt };
       if (!(psi > 0)) R.eet.err = 'Ψ non défini (dimensions ou valeur saisie).';

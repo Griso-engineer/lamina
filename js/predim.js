@@ -37,12 +37,8 @@
     const seg = (x1, y1, x2, y2, k) => k === 'fx' ? `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${INK}" stroke-width="3.2"/>` : k === 'ss' ? `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${INK}" stroke-width="1.3"/>` : `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="${ACC}" stroke-width="1.1" stroke-dasharray="2.5 2"/>`;
     return `<svg viewBox="0 0 52 30" width="52" height="30" aria-hidden="true"><rect x="9" y="4" width="34" height="22" fill="${GLASS}"/>${seg(9, 26, 43, 26, e.bottom)}${seg(9, 4, 43, 4, e.top)}${seg(9, 4, 9, 26, e.left)}${seg(43, 4, 43, 26, e.right)}</svg>`;
   }
-  /* Élévation du vitrage : appuis (encastrement hachuré, appui simple à triangles, bord libre tireté), cotes a et b. */
-  function elevation(c, a, b, W = 560, H = 440) {
-    const ml = 92, mr = 46, mt = 46, mb = 92;
-    const k = Math.min((W - ml - mr) / a, (H - mt - mb) / b), w = a * k, h = b * k;
-    const x0 = ml + (W - ml - mr - w) / 2, y0 = mt + (H - mt - mb - h) / 2, e = c.edges;
-    const edge = (x1, y1, x2, y2, kd, nx, ny) => {
+  // bord du vitrage : encastrement hachuré, appui simple à triangles, bord libre tireté (normale extérieure nx, ny)
+  function edge(x1, y1, x2, y2, kd, nx, ny) {
       const L = Math.hypot(x2 - x1, y2 - y1), tx = (x2 - x1) / L, ty = (y2 - y1) / L;
       if (kd === 'fx') {
         let s = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${INK}" stroke-width="5"/>`;
@@ -57,11 +53,17 @@
         return s;
       }
       return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${ACC}" stroke-width="2" stroke-dasharray="7 5"/>`;
-    };
+  }
+  const edges4 = (e, x0, y0, w, h) => edge(x0, y0 + h, x0 + w, y0 + h, e.bottom, 0, 1) + edge(x0, y0, x0 + w, y0, e.top, 0, -1) + edge(x0, y0, x0, y0 + h, e.left, -1, 0) + edge(x0 + w, y0, x0 + w, y0 + h, e.right, 1, 0);
+  /* Élévation du vitrage : appuis, cotes a et b. */
+  function elevation(c, a, b, W = 560, H = 440) {
+    const ml = 92, mr = 46, mt = 46, mb = 92;
+    const k = Math.min((W - ml - mr) / a, (H - mt - mb) / b), w = a * k, h = b * k;
+    const x0 = ml + (W - ml - mr - w) / 2, y0 = mt + (H - mt - mb - h) / 2, e = c.edges;
     let s = `<defs><linearGradient id="gl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef3fa"/><stop offset="1" stop-color="#d9e3f1"/></linearGradient></defs>`;
     s += `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="url(#gl)"/>`;
     s += `<path d="M${x0 + w * 0.12} ${y0 + h * 0.62} L${x0 + w * 0.34} ${y0 + h * 0.2} M${x0 + w * 0.2} ${y0 + h * 0.72} L${x0 + w * 0.42} ${y0 + h * 0.3}" stroke="#fff" stroke-width="3" opacity=".9"/>`;
-    s += edge(x0, y0 + h, x0 + w, y0 + h, e.bottom, 0, 1) + edge(x0, y0, x0 + w, y0, e.top, 0, -1) + edge(x0, y0, x0, y0 + h, e.left, -1, 0) + edge(x0 + w, y0, x0 + w, y0 + h, e.right, 1, 0);
+    s += edges4(e, x0, y0, w, h);
     // cotes
     const yd = y0 + h + 44, xd = x0 - 50, tick = (x, y, v) => `<path d="M${x - 5} ${y + (v ? 0 : 5)} L${x + 5} ${y - (v ? 0 : 5)}" stroke="${INK}" stroke-width="1.3"/>`;
     s += `<line x1="${x0}" y1="${yd}" x2="${x0 + w}" y2="${yd}" stroke="${INK}"/><line x1="${x0}" y1="${y0 + h + 22}" x2="${x0}" y2="${yd + 6}" stroke="${MUTED}" stroke-width=".8"/><line x1="${x0 + w}" y1="${y0 + h + 22}" x2="${x0 + w}" y2="${yd + 6}" stroke="${MUTED}" stroke-width=".8"/>${tick(x0, yd)}${tick(x0 + w, yd)}`;
@@ -74,6 +76,101 @@
     let lx = W / 2 - items.length * 70;
     items.forEach(([kk, lab]) => { s += `<g transform="translate(${lx},${ly})">${kk === 'fx' ? `<line x1="0" y1="0" x2="34" y2="0" stroke="${INK}" stroke-width="5"/>` : kk === 'ss' ? `<line x1="0" y1="0" x2="34" y2="0" stroke="${INK}" stroke-width="2"/><path d="M17 1 L10 12 L24 12 Z" fill="#fff" stroke="${INK}"/>` : `<line x1="0" y1="0" x2="34" y2="0" stroke="${ACC}" stroke-width="2" stroke-dasharray="7 5"/>`}<text x="42" y="5" font-size="13" fill="${INK}">${lab}</text></g>`; lx += 140; });
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:0 auto" font-family="Inter, sans-serif">${s}</svg>`;
+  }
+
+  // ======================================================================
+  //  VISUALISATION D'UN CAS (champ de contraintes ou de flèche)
+  // ======================================================================
+  const STOPS = ['#313695', '#4575b4', '#74add1', '#abd9e9', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'];
+  function cmap(t) {
+    t = Math.max(0, Math.min(1, t)) * (STOPS.length - 1);
+    const i = Math.min(STOPS.length - 2, Math.floor(t)), f = t - i, h2 = (s) => [1, 3, 5].map((k) => parseInt(s.substr(k, 2), 16));
+    const A1 = h2(STOPS[i]), B1 = h2(STOPS[i + 1]);
+    return `rgb(${A1.map((v, k) => Math.round(v + (B1[k] - v) * f)).join(',')})`;
+  }
+  const RITZ_LOAD = { uni: 'uni', conc: 'point', lin: 'linx', lin2: 'liny', tri: 'triy' };
+  /* Champ d'une ligne : plaques par Ritz, bandes et consoles par la solution de poutre (uniforme sur la largeur). */
+  function fieldOf(R, o, nx = 64) {
+    const g = R.geo, c = R.case;
+    const ny = Math.max(8, Math.round(nx * g.b / g.a));
+    if (c.strip) {
+      const B = o.beam, L = g.b, k = 6 / (o.h * o.h);
+      const sAt = (z) => k * Math.abs(B.m(z)), yAt = (z) => B.yAt(z);
+      const cells = [];
+      for (let iy = 0; iy < ny; iy++) { const z = (iy + 0.5) / ny * L, p = { w: yAt(z), smax: sAt(z) }; cells.push(new Array(nx).fill(p)); }
+      let iS = 0, iY = 0; B.xs.forEach((z, i) => { if (Math.abs(B.ms[i]) > Math.abs(B.ms[iS])) iS = i; if (Math.abs(B.ys[i]) > Math.abs(B.ys[iY])) iY = i; });
+      return { cells, nx, ny, sMax: { v: k * Math.abs(B.ms[iS]), x: g.a / 2, y: B.xs[iS] }, wMax: { v: B.ys[iY], x: g.a / 2, y: B.xs[iY] }, src: 'poutre' };
+    }
+    const RZ = window.LaminaRitz, key = RK.valKey(o.load);
+    const S = RZ.solve({ a: g.a, b: g.b, E: g.E, nu: g.nu, h: o.h, edges: c.edges, load: RITZ_LOAD[o.load] || 'uni', q: key === 'q' ? o.val / 1000 : 0, W: key === 'W' ? o.val * 1000 : 0, x0: g.a / 2, y0: g.b / 2, N: 11 });
+    if (!S) return null;
+    const G = S.grid(nx, ny);
+    return { cells: G.cells, nx, ny, sMax: G.sMax, wMax: G.wMax, src: 'ritz' };
+  }
+  /* Carte colorée en élévation (bleu → rouge), appuis, échelle de couleurs, extremum repéré. */
+  function fieldMap(R, F, kind, W = 640) {
+    const g = R.geo, ml = 34, mt = 26, cbw = 96, k = Math.min((W - ml - cbw - 30) / g.a, 330 / g.b), w = g.a * k, h = g.b * k, H = h + mt + 64, x0 = ml, y0 = mt;
+    const val = (p) => (kind === 'w' ? Math.abs(p.w) : p.smax), vmax = kind === 'w' ? Math.abs(F.wMax.v) : F.sMax.v;
+    const cw = w / F.nx, ch = h / F.ny;
+    let s = '';
+    F.cells.forEach((row, iy) => row.forEach((p, ix) => { s += `<rect x="${(x0 + ix * cw).toFixed(2)}" y="${(y0 + h - (iy + 1) * ch).toFixed(2)}" width="${(cw + 0.6).toFixed(2)}" height="${(ch + 0.6).toFixed(2)}" fill="${cmap(vmax > 0 ? val(p) / vmax : 0)}"/>`; }));
+    s += edges4(R.case.edges, x0, y0, w, h);
+    const M = kind === 'w' ? F.wMax : F.sMax, mxp = x0 + M.x / g.a * w, myp = y0 + h - M.y / g.b * h;
+    const lab = kind === 'w' ? `w max = ${fmt(Math.abs(M.v), 2)} mm` : `σ max = ${fmt(M.v, 1)} MPa`;
+    s += `<circle cx="${mxp}" cy="${myp}" r="6" fill="none" stroke="#111" stroke-width="2"/><circle cx="${mxp}" cy="${myp}" r="2" fill="#111"/>`;
+    const tx = Math.min(Math.max(mxp, x0 + 70), x0 + w - 70), ty = myp > y0 + 22 ? myp - 12 : myp + 22;
+    s += `<text x="${tx}" y="${ty}" font-size="12.5" font-weight="800" text-anchor="middle" fill="#111" stroke="#fff" stroke-width="3.5" paint-order="stroke">${lab}</text>`;
+    // cotes discrètes
+    s += `<text x="${x0 + w / 2}" y="${y0 + h + 40}" font-size="11.5" text-anchor="middle" fill="${MUTED}">a = ${fmtG(g.a, 0)} mm</text><text x="${x0 - 22}" y="${y0 + h / 2}" font-size="11.5" text-anchor="middle" fill="${MUTED}" transform="rotate(-90 ${x0 - 22} ${y0 + h / 2})">b = ${fmtG(g.b, 0)} mm</text>`;
+    // échelle de couleurs
+    const cx = x0 + w + 40, cy0 = y0, chh = Math.max(140, h);
+    let gr = ''; STOPS.forEach((col, i) => { gr += `<stop offset="${i / (STOPS.length - 1)}" stop-color="${col}"/>`; });
+    s += `<defs><linearGradient id="cb${kind}" x1="0" y1="1" x2="0" y2="0">${gr}</linearGradient></defs><rect x="${cx}" y="${cy0}" width="16" height="${chh}" fill="url(#cb${kind})" stroke="#999" stroke-width=".5"/>`;
+    [0, 0.25, 0.5, 0.75, 1].forEach((t) => { const yy = cy0 + chh * (1 - t); s += `<line x1="${cx + 16}" y1="${yy}" x2="${cx + 21}" y2="${yy}" stroke="#666"/><text x="${cx + 24}" y="${yy + 4}" font-size="10.5" fill="#333">${fmt(vmax * t, kind === 'w' ? 2 : 1)}</text>`; });
+    s += `<text x="${cx}" y="${cy0 - 9}" font-size="10.5" font-weight="700" fill="#333">${kind === 'w' ? 'w [mm]' : '|σ| [MPa]'}</text>`;
+    return `<svg viewBox="0 0 ${W} ${Math.max(H, chh + mt + 30)}" width="100%" style="max-width:${W}px;display:block" font-family="Inter, sans-serif">${s}</svg>`;
+  }
+  /* Contrainte sur l'épaisseur au point dimensionnant : répartition linéaire de flexion sur h (traction / compression). */
+  function thickness(o, W = 360, H = 320) {
+    const sg = o.gov.v, S = Math.abs(sg), x0 = W / 2, top = 70, bot = H - 70, mid = (top + bot) / 2, k = (W / 2 - 78) / Math.max(S, 1e-9);
+    const sTop = -sg, sBot = sg;  // σ > 0 : face opposée à la charge tendue (convention de Roark)
+    const col = (v) => (v >= 0 ? '#d73027' : '#4575b4');
+    let s = `<rect x="${x0 - 40}" y="${top}" width="80" height="${bot - top}" fill="${GLASS}" stroke="${INK}" stroke-width="1.2"/>`;
+    // charge
+    s += `<path d="M${x0} ${top - 44} v32" stroke="${INK}" stroke-width="2"/><path d="M${x0 - 6} ${top - 20} l6 9 l6 -9" fill="none" stroke="${INK}" stroke-width="2"/><text x="${x0 - 10}" y="${top - 34}" font-size="11" text-anchor="end" fill="${MUTED}">charge</text>`;
+    s += `<line x1="${x0}" y1="${top - 6}" x2="${x0}" y2="${bot + 6}" stroke="${INK}"/><line x1="${x0 - 52}" y1="${mid}" x2="${x0 + 52}" y2="${mid}" stroke="${MUTED}" stroke-dasharray="4 3"/>`;
+    s += `<polygon points="${x0},${mid} ${x0 + sTop * k},${top} ${x0},${top}" fill="${col(sTop)}" opacity=".78"/><polygon points="${x0},${mid} ${x0 + sBot * k},${bot} ${x0},${bot}" fill="${col(sBot)}" opacity=".78"/>`;
+    s += `<line x1="${x0 + sTop * k}" y1="${top}" x2="${x0 + sBot * k}" y2="${bot}" stroke="${INK}" stroke-width="1.6"/>`;
+    // valeurs au bout du diagramme, intitulé de la face du côté opposé
+    const lbl = (v, y, face) => {
+      const sgn = v >= 0 ? 1 : -1;
+      return `<text x="${x0 + sgn * (Math.abs(v) * k + 7)}" y="${y + 5}" font-size="13" font-weight="800" text-anchor="${sgn > 0 ? 'start' : 'end'}" fill="${col(v)}">${sgn > 0 ? '+' : '−'}${fmt(Math.abs(v), 1)}</text>`
+        + `<text x="${x0 - sgn * 48}" y="${y + (face === 'top' ? 14 : -6)}" font-size="11" text-anchor="${sgn > 0 ? 'end' : 'start'}" fill="${MUTED}">${face === 'top' ? 'face chargée' : 'face opposée'}</text>`
+        + `<text x="${x0 - sgn * 48}" y="${y + (face === 'top' ? 28 : 8)}" font-size="11" font-weight="700" text-anchor="${sgn > 0 ? 'end' : 'start'}" fill="${col(v)}">${v >= 0 ? 'traction' : 'compression'}</text>`;
+    };
+    s += lbl(sTop, top, 'top') + lbl(sBot, bot, 'bot');
+    s += `<text x="${x0}" y="${bot + 30}" font-size="11" text-anchor="middle" fill="${MUTED}">épaisseur équivalente h = ${fmtG(o.h, 2)} mm · contraintes en MPa</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:0 auto" font-family="Inter, sans-serif">${s}</svg>`;
+  }
+  function vizHtml(R) {
+    const usable = R.rows.filter((o) => o.out && (!o.err || o.na));
+    if (!usable.length) return '<p class="note">Aucun cas calculable à visualiser.</p>';
+    let o = R.rows[+st.viz];
+    if (!o || !o.out || (o.err && !o.na)) o = R.gov || usable[0];
+    const F = fieldOf(R, o);
+    if (!F) return '<p class="note warn">Champ non calculable pour ce cas.</p>';
+    const plate = !R.case.strip, src = plate ? 'méthode de Ritz (plaque de Kirchhoff, ν = ' + fmtG(R.geo.nu, 2) + ')' : 'statique de poutre, répartition uniforme sur la largeur';
+    const nuNote = plate && o.L && o.L.nu != null && Math.abs(o.L.nu - R.geo.nu) > 0.02 ? ` L’écart vient surtout de ν (tables de Roark établies pour ν = ${String(o.L.nu).replace(".", ",")}).` : "";
+    if (o.st === 'uls') {
+      const cmp = plate ? ` Valeur de vérification (Roark, ${esc(o.gov.label.toLowerCase())}) : ${fmt(Math.abs(o.gov.v), 1)} MPa.${nuNote}` : '';
+      return `<div class="pd-viz"><div><div class="sub-title" style="margin-top:0">Contrainte en élévation</div>${fieldMap(R, F, 's')}
+          <p class="cap">Contrainte principale maximale en valeur absolue (face la plus tendue), ${src} : σ<sub>max</sub> = ${fmt(F.sMax.v, 1)} MPa.${cmp}${plate && o.load === 'conc' ? ' Charge concentrée : champ lissé près du point d’application.' : ''}</p></div>
+        <div><div class="sub-title" style="margin-top:0">Contrainte sur l’épaisseur</div>${thickness(o)}
+          <p class="cap">${sub(o.gov.label)} : répartition linéaire de la contrainte de flexion sur l’épaisseur équivalente h (MPa). Pour un feuilleté, la contrainte de chaque pli est celle de son h<sub>ef;σ</sub>.</p></div></div>`;
+    }
+    const cmp = o.na ? ' Roark ne donne pas la flèche pour ces appuis : valeur indicative, non vérifiée.' : plate ? ` Valeur de vérification (Roark) : ${fmt(o.Ed, 2)} mm.${nuNote}` : '';
+    return `<div><div class="sub-title" style="margin-top:0">Déformée hors plan en élévation</div>${fieldMap(R, F, 'w', 720)}
+      <p class="cap">Flèche hors plan w, ${src} : w<sub>max</sub> = ${fmt(Math.abs(F.wMax.v), 2)} mm.${cmp}</p></div>`;
   }
 
   // ======================================================================
@@ -126,14 +223,23 @@
       ${blockHead('02', 'Cas de charge', 'Une ligne par cas : ELU (contrainte) ou ELS (flèche), type et intensité de la charge, épaisseur équivalente h et résistance f<sub>g;d</sub> reprises des onglets Épaisseur équivalente et Résistance.')}
       <p class="note" style="margin-top:0">ELU : h = h<sub>ef;σ</sub> du pli étudié et f<sub>g;d</sub> pour la durée de la charge. ELS : h = h<sub>ef;w</sub>. Verre monolithique : h = t. Les intensités sont les valeurs combinées (ELU pondérées, ELS de service).</p>
       <div class="tbl-wrap"><table class="grid pd-grid">
-        <thead><tr><th class="rowh">#</th><th class="rowh">Cas</th><th>État</th><th>Charge</th><th>Intensité</th><th>d [mm]</th><th>b<sub>eff</sub> [mm]</th><th>h [mm]</th><th>f<sub>g;d</sub> [MPa]</th><th>Limite ${fdc ? '' : 'b'}/n</th><th>Plafond [mm]</th><th>Résultat</th><th>Taux</th><th></th></tr></thead>
+        <thead><tr class="grp"><th class="rowh" rowspan="2">#</th><th class="rowh" rowspan="2">Cas</th><th rowspan="2">État</th><th rowspan="2">Charge</th><th rowspan="2">Intensité</th><th colspan="2">Position de la charge</th><th>Épaisseur équivalente</th><th>Résistance</th><th colspan="2">Critère de flèche</th><th rowspan="2">Résultat</th><th rowspan="2">Taux</th><th rowspan="2"></th></tr>
+          <tr><th>d [mm]</th><th>b<sub>eff</sub> [mm]</th><th>h [mm]</th><th>f<sub>g;d</sub> [MPa]</th><th>Limite ${fdc ? '' : 'b'}/n</th><th>Plafond [mm]</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       <div style="margin:8px 0 4px;display:flex;gap:8px"><button class="btn sm" data-pact="addRow" data-v="uls">+ cas ELU</button><button class="btn sm" data-pact="addRow" data-v="sls">+ cas ELS</button></div>
       <p class="muted" style="font-size:12px;margin-top:6px">${c.strip ? 'd : position de la charge linéique ou ponctuelle depuis le côté z = 0 (vide : ' + (c.bc === 'cant' ? 'extrémité libre' : 'mi-portée') + ') ; b<sub>eff</sub> : largeur sur laquelle se répartit une charge ponctuelle (vide : toute la largeur a).' : 'Charges linéiques et ponctuelles quelconques : choisir des appuis de type bande ou console.'}</p>
       ${blockHead('03', 'Résultats', c.strip ? 'σ = 6·m/h² (m par unité de largeur), flèche par double intégration de m/D′.' : 'σ = β·q·b²/h², y = α·q·b⁴/(E·h³), R = γ·q·b (Roark, tableau 11.4). Coins supposés maintenus.')}
       <div id="pResults"></div>
+      ${blockHead('04', 'Visualisation', 'Choisir un cas : ELU — contrainte en élévation et sur l’épaisseur ; ELS — déformée hors plan en élévation. Champs pour illustration : les vérifications restent celles du tableau ci-dessus.')}
+      <div class="fields wide" style="margin-bottom:14px">${field('Cas de charge', sel('viz', st.rows.map((r, i) => [String(i), `${i + 1}. ${r.name || 'Cas ' + (i + 1)} — ${r.st === 'sls' ? 'ELS' : 'ELU'}`]), { style: 'min-width:260px' }))}</div>
+      <div id="pViz"></div>
     </div>`;
     refresh();
+  }
+  let vizT = null;
+  function refreshViz(R) {
+    clearTimeout(vizT);
+    vizT = setTimeout(() => { const el = $('#pViz'); if (el) el.innerHTML = R.valid ? vizHtml(R) : ''; }, 120);
   }
 
   function refresh() {
@@ -145,6 +251,7 @@
     const fig = $('#pFig'), box = $('#pResults');
     if (fig) fig.innerHTML = R.valid ? elevation(R.case, R.geo.a, R.geo.b) : '';
     const fd = $('#pFd'); if (fd) fd.innerHTML = R.fdDefl ? `${esc(R.fdDefl.ref)} : flèche ≤ ${esc(R.fdDefl.Ln)}/${R.fdDefl.lim} et ≤ ${R.fdDefl.max} mm, soit ${fmt(Math.min(R.fdDefl.L / R.fdDefl.lim, R.fdDefl.max), 1)} mm.` : '';
+    refreshViz(R);
     if (!R.valid) { if (box) box.innerHTML = R.warnings.map((x) => `<p class="note warn">${sub(x)}</p>`).join(''); return; }
     R.rows.forEach((o) => {
       const rs = $('#pRes' + o.i), rt = $('#pRat' + o.i), li = $('#pLim' + o.i), mx = $('#pMax' + o.i);

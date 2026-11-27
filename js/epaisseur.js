@@ -25,7 +25,7 @@
   let saveT = null;
   function persist() { clearTimeout(saveT); saveT = setTimeout(() => { flush(db); A().saveDb(); }, 250); }
 
-  // coupe dilatée : plis, intercalaires, plan de symétrie et centre de gravité
+  // coupe dilatée : plis, intercalaires, plan de symétrie du feuilleté
   function section(R, W = 440) {
     const g = R.g; if (!g) return '';
     const k = Math.min(6, 170 / g.total), H = g.total * k + 34, x0 = 96, x1 = W - 150, yb = H - 16;
@@ -38,11 +38,10 @@
       y -= hh;
       if (i < g.n - 1) { const hi = g.hints[i] * k; o += `<rect x="${x0}" y="${y - hi}" width="${x1 - x0}" height="${hi}" fill="${ACC}" opacity=".55"/>`; y -= hi; }
     });
-    const yg = yb - g.zg * k, yc = yb - g.zc * k;
+    const yg = yb - g.zg * k;
     o += `<line x1="${x0 - 4}" y1="${yg}" x2="${x1 + 4}" y2="${yg}" stroke="${DARK}" stroke-width="1.2" stroke-dasharray="6 3"/>`;
-    if (!g.sym) o += `<line x1="${x0 - 4}" y1="${yc}" x2="${x1 + 4}" y2="${yc}" stroke="${RED}" stroke-width="1" stroke-dasharray="2 2"/>`;
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block" font-family="Inter, sans-serif">${o}</svg>
-      <p class="cap">Coupe dilatée, pli 1 en bas. Tireté bleu : plan de symétrie du feuilleté${g.sym ? ' (confondu avec le centre de gravité du verre)' : ' ; pointillé rouge : centre de gravité du verre'}. ${sub(`h_m mesurées depuis le ${g.ref === 'cg' ? 'centre de gravité du verre' : 'plan de symétrie'}.`)}</p>`;
+      <p class="cap">Coupe dilatée, pli 1 en bas. Tireté : plan de symétrie du feuilleté, depuis lequel sont mesurées les distances h<sub>m</sub> (NF EN 16612 annexe D).</p>`;
   }
 
   // ======================================================================
@@ -55,7 +54,7 @@
       <td>${i < n - 1 ? `<input type="number" step="any" data-ep="hints.${i}" value="${esc(st.hints[i])}">` : '<span class="muted" style="font-size:12px;padding:0 6px">—</span>'}</td><td class="ro" id="eHm${i}"></td>
       <td>${n > 1 ? `<button class="btn sm ghost" data-eact="delPly" data-i="${i}" title="Supprimer ce pli">✕</button>` : ''}</td></tr>`).join('');
     const ee = st.eet, EC = C.EET_CASE[ee.cas] || C.EET_CASES[0];
-    const loadsG = GL.LOADS.filter((L) => il && il.G && GL.pick(il.G[L.id], st.pos === 'int' ? 'int' : 'ext') !== undefined);
+    const loadsG = il && il.G ? GL.loadVariants(il, 'G') : [];
     app.innerHTML = `<div class="page">
       <div class="actionbar">
         <div class="grow"><span class="crumb">${p ? `Projet <b>${esc(p.name)}</b> ›` : 'Hors projet ›'} <b id="eCrumb">${esc(st.name || 'Sans nom')}</b></span><span class="dirty" id="eDirty">${dirty ? 'modifié · non enregistré' : ''}</span></div>
@@ -68,10 +67,6 @@
         <div class="fields">${field('Repère', inp('name', { type: 'text', ph: 'ex. Feuilleté F1' }))}</div>
         <div class="tbl-wrap" style="margin-top:12px"><table class="grid"><thead><tr><th class="rowh">Pli</th><th>h [mm]</th><th>Intercalaire au-dessus [mm]</th><th>h<sub>m</sub> [mm]</th><th></th></tr></thead><tbody>${plyRows}</tbody></table></div>
         <div style="margin:8px 0 14px"><button class="btn sm" data-eact="addPly">+ pli</button></div>
-        <div class="fields wide">
-          ${field('Plan de référence des distances h<sub>m</sub>', sel('ref', [['geo', 'Plan de symétrie du feuilleté (EN 16612, DTA)'], ['cg', 'Centre de gravité du verre (axe neutre)']], { rr: true }), '', 'identiques pour une composition symétrique')}
-          ${field('Position dans le vitrage', sel('pos', [['ext', 'Vitrage simple ou composant extérieur d’un VI'], ['int', 'Composant intérieur d’un VI']], { rr: true }), '', 'FD P78-468 et DTA : ω de neige et d’hiver')}
-        </div>
       </div>
       <div><div class="fig" id="eFig"></div></div></div>
       ${blockHead('02', 'Méthode ω', 'NF EN 16612 annexe D : h<sub>ef;w</sub> = (Σh<sub>k</sub>³ + 12·ω·Σh<sub>k</sub>·h<sub>m,k</sub>²)<sup>1/3</sup> ; h<sub>ef;σ,j</sub> = √(h<sub>ef;w</sub>³ / (h<sub>j</sub> + 2·ω·h<sub>m,j</sub>)). ω par cas de charge : FD P78-468 tableau 32 ou DTA de l’intercalaire.')}
@@ -84,7 +79,7 @@
         ${field('Charge et appuis', sel('eet.cas', C.EET_CASES.map((x) => [x.id, x.label]), { rr: true }), '', '', true)}
         ${EC.id === 'ss4' ? `${field('Côté a', inp('eet.a'), 'mm')}${field('Côté b', inp('eet.b'), 'mm')}` : EC.id === 'bss' ? field('Portée L', inp('eet.L'), 'mm') : `${field('Ψ', inp('eet.psi'), 'mm⁻²·10⁶', 'valeur lue dans les tableaux A.1 ou A.2')}${field('Formule de η', sel('eet.kind', [['plate', 'Plaque — (A.4), (A.7)'], ['beam', 'Poutre — (A.8), (A.9)']]))}`}
         ${field('Module de cisaillement G', sel('eet.gSrc', [['il', il && il.G ? `${il.label} — ${il.src}` : 'Non fourni pour cet intercalaire — G saisi'], ['custom', 'Saisi']], { rr: true }))}
-        ${st.eet.gSrc === 'il' && il && il.G ? field('Cas de charge', sel('eet.load', loadsG.map((L) => [L.id, L.label]), { rr: true })) : field('G', inp('eet.G', { ph: 'à saisir' }), 'MPa', il && il.G ? '' : 'aucune valeur de G dans FD P78-468 pour cet intercalaire')}
+        ${st.eet.gSrc === 'il' && il && il.G ? field('Cas de charge', sel('eet.load', loadsG.map((V) => [V.key, V.label]), { rr: true })) : field('G', inp('eet.G', { ph: 'à saisir' }), 'MPa', il && il.G ? '' : 'aucune valeur de G dans FD P78-468 pour cet intercalaire')}
         ${EC.kind !== 'beam' ? field('Module E / ν', `<div class="inline">${inp('E')}${inp('nu')}</div>`, 'MPa / —') : field('Module E', inp('E'), 'MPa')}
       </div><div id="eEet" style="margin-top:14px"></div>` : ''}
       <div id="eNotes"></div>
@@ -105,26 +100,26 @@
     const custom = st.il === 'custom';
     if (wBox) {
       // la structure (et les champs ω saisis) est construite une fois ; on ne met à jour que les cellules
-      const loads = custom ? GL.LOADS.filter((L) => !/50/.test(L.id)) : R.rows.map((r) => r.L);
-      const key = loads.map((L) => L.id).join(',') + '|' + g.n + '|' + st.il;
+      const loads = custom ? R.vars : R.rows;   // éléments { key, id, label, L }
+      const key = loads.map((V) => V.key).join(',') + '|' + g.n + '|' + st.il;
       if (wBox.dataset.key !== key) {
         wBox.dataset.key = key;
-        const rows = loads.map((L) => `<tr${L.id === 'W' ? ' class="gov"' : ''}><td>${sub(L.label)}</td><td class="f">${esc(L.dur)}</td><td class="num">${custom ? `<input type="number" step="any" data-ep="wc.${L.id}" value="${esc(st.wc[L.id] != null ? st.wc[L.id] : '')}" placeholder="—" style="max-width:80px">` : `<span id="eW_${L.id}"></span>`}</td><td class="num"><b id="eHw_${L.id}"></b></td>${g.h.map((_, k) => `<td class="num" id="eHs_${L.id}_${k}"></td>`).join('')}<td class="num"><b id="eHsm_${L.id}"></b></td></tr>`).join('');
+        const rows = loads.map((V) => `<tr${V.key === 'W' ? ' class="gov"' : ''}><td>${sub(V.label)}</td><td class="f">${esc(V.L.dur)}</td><td class="num">${custom ? `<input type="number" step="any" data-ep="wc.${V.id}" value="${esc(st.wc[V.id] != null ? st.wc[V.id] : '')}" placeholder="—" style="max-width:80px">` : `<span id="eW_${V.key}"></span>`}</td><td class="num"><b id="eHw_${V.key}"></b></td>${g.h.map((_, k) => `<td class="num" id="eHs_${V.key}_${k}"></td>`).join('')}<td class="num"><b id="eHsm_${V.key}"></b></td></tr>`).join('');
         wBox.innerHTML = `<div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>Cas de charge (charge de plus courte durée)</th><th>Durée</th><th class="num">ω</th><th class="num">h<sub>ef;w</sub></th>${g.h.map((h, k) => `<th class="num">h<sub>ef;σ,${k + 1}</sub><br><small>pli ${k + 1}</small></th>`).join('')}<th class="num">h<sub>ef;σ</sub> min</th></tr></thead><tbody>${rows}</tbody></table></div><p class="cap" id="eWcap"></p>`;
       }
       const T = (id, v) => { const e = $('#' + id); if (e) e.textContent = v; };
-      loads.forEach((L) => {
-        const r = R.rows.find((x) => x.L === L);
-        T('eW_' + L.id, r ? fmt(r.w, 2) : '—'); T('eHw_' + L.id, r ? fmt(r.hw, 2) : '—'); T('eHsm_' + L.id, r ? fmt(r.hsMin, 2) : '—');
-        g.h.forEach((_, k) => T(`eHs_${L.id}_${k}`, r ? fmt(r.hs[k], 2) : '—'));
+      loads.forEach((V) => {
+        const r = R.rows.find((x) => x.key === V.key);
+        T('eW_' + V.key, r ? fmt(r.w, 2) : '—'); T('eHw_' + V.key, r ? fmt(r.hw, 2) : '—'); T('eHsm_' + V.key, r ? fmt(r.hsMin, 2) : '—');
+        g.h.forEach((_, k) => T(`eHs_${V.key}_${k}`, r ? fmt(r.hs[k], 2) : '—'));
       });
-      const cap = $('#eWcap'); if (cap) cap.textContent = `Épaisseurs en mm. ${R.il.src}${R.il.dta ? ' — valeurs du DTA pour ' + R.il.label : ''} ; position : ${R.pos === 'int' ? 'composant intérieur d’un vitrage isolant' : 'vitrage simple ou composant extérieur'}.`;
+      const cap = $('#eWcap'); if (cap) cap.textContent = `Épaisseurs en mm. ${R.il.src}${R.il.dta ? ' — valeurs du DTA pour ' + R.il.label : ''}. VI : vitrage isolant.`;
     }
     if (eBox && R.eet) {
       const E = R.eet;
       if (E.err) eBox.innerHTML = `<p class="note warn">${sub('EET : ' + E.err)}</p>`;
       else {
-        const wRef = R.rows.find((r) => r.L.id === (st.eet.gSrc === 'il' ? st.eet.load : 'W'));
+        const wRef = R.rows.find((r) => r.key === (st.eet.gSrc === 'il' ? st.eet.load : 'W')) || R.rows.find((r) => r.L.id === GL.splitKey(st.eet.load).id);
         eBox.innerHTML = `<div class="kpis k3" style="grid-template-columns:repeat(4,minmax(0,1fr))">
           <div class="kpi"><b>Paramètre de couplage η</b><span>${fmt(E.eta, 3)}</span><small>${esc(E.formula || E.note || '')} · Ψ = ${fmtG(E.psi * 1e6, 4)}·10⁻⁶ mm⁻²${E.psiInfo ? ' (' + sub(E.psiInfo) + ')' : ''}</small></div>
           <div class="kpi hero"><b>h<sub>ef;w</sub> (EET)</b><span>${fmt(E.hw, 2)} mm</span><small>G = ${fmtG(E.G, 2)} MPa — ${esc(E.gTxt)}</small></div>
@@ -146,14 +141,14 @@
     const g = R.g, date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
     let n = 0; const H2 = (t) => `<h2><span class="n">${++n}</span>${t}</h2>`;
     const kv = (a, b) => `<div><span>${a}</span><b>${b}</b></div>`;
-    const rows = R.rows.map((r) => `<tr${r.L.id === 'W' ? ' class="gov"' : ''}><td>${sub(r.L.label)}</td><td>${esc(r.L.dur)}</td><td class="num">${fmt(r.w, 2)}</td><td class="num">${fmt(r.hw, 2)}</td>${g.h.map((_, k) => `<td class="num">${fmt(r.hs[k], 2)}</td>`).join('')}</tr>`).join('');
+    const rows = R.rows.map((r) => `<tr${r.L.id === 'W' ? ' class="gov"' : ''}><td>${sub(r.label)}</td><td>${esc(r.L.dur)}</td><td class="num">${fmt(r.w, 2)}</td><td class="num">${fmt(r.hw, 2)}</td>${g.h.map((_, k) => `<td class="num">${fmt(r.hs[k], 2)}</td>`).join('')}</tr>`).join('');
     const E = R.eet;
     return `<section class="rp-page"><header class="rp-head"><div class="l"><b>${esc(project || 'Note de calcul')}</b>Verre feuilleté — épaisseurs effectives (NF EN 16612, FD P78-468${E && !E.err ? ', EN 19100-2' : ''})${opts && opts.ref ? ' · ' + esc(opts.ref) : ''}</div><div class="r">${!opts || opts.logo ? '<div class="logo-s">tracés</div>' : ''}${esc(s.name)} · ${date}</div></header>
-      <div class="rp-title"><h1>${esc(s.name)} — ${esc(C.compLabel(s))}${total > 1 ? ` (${idx + 1}/${total})` : ''}</h1><p>Intercalaire : ${esc(R.il.label)} (${esc(R.il.src)}) · ${R.pos === 'int' ? 'composant intérieur d’un vitrage isolant' : 'vitrage simple ou composant extérieur'}</p></div>
+      <div class="rp-title"><h1>${esc(s.name)} — ${esc(C.compLabel(s))}${total > 1 ? ` (${idx + 1}/${total})` : ''}</h1><p>Intercalaire : ${esc(R.il.label)} (${esc(R.il.src)})</p></div>
       ${H2('Composition')}
       <div class="rp-fig"><div style="width:95mm;flex:none">${section(R, 440)}</div><div style="flex:1"><div class="rp-kv" style="grid-template-columns:1fr">
         ${kv('Plis de verre', g.h.map((x) => fmtG(x, 2)).join(' / ') + ' mm')}${kv('Intercalaires', g.hints.map((x) => fmtG(x, 2)).join(' / ') + ' mm')}
-        ${kv('Plan de référence', g.ref === 'cg' ? 'centre de gravité du verre' : 'plan de symétrie du feuilleté')}${kv('Verre / total', `${fmtG(g.glass, 2)} / ${fmtG(g.total, 2)} mm`)}
+        ${kv('Distances h<sub>m</sub>', 'depuis le plan de symétrie du feuilleté (NF EN 16612)')}${kv('Verre / total', `${fmtG(g.glass, 2)} / ${fmtG(g.total, 2)} mm`)}
         ${kv('Distances h<sub>m</sub>', g.hm.map((x) => fmt(x, 2)).join(' / ') + ' mm')}
       </div></div></div>
       ${H2('Méthode ω — NF EN 16612 annexe D')}

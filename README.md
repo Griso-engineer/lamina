@@ -20,6 +20,9 @@ Firmitas (onglets de calcul, projets dans le navigateur, fiche NDC en PDF ou Wor
     rigidité de poutre E·h³/12 ou de plaque E·h³/12(1 − ν²) ; flèche par intégration exacte.
   - *Flèche* : critère FD P78-468 § 10.5 (4 côtés : min(a, b)/60 ≤ 30 mm ; 2 ou 3 côtés : b/100 ou b/150 en
     vitrage isolant, ≤ 50 mm) ou limite et plafond saisis par ligne ; ν = 0,23 par défaut.
+  - *Visualisation* d'un cas choisi : ELU — contrainte principale maximale en élévation (bleu → rouge) et
+    répartition de la contrainte sur l'épaisseur ; ELS — déformée hors plan en élévation. Plaques : méthode de
+    Ritz (plaque de Kirchhoff, js/plate-ritz.js, recoupée avec Roark) ; bandes et consoles : solution de poutre.
   - Les calculs enregistrés avec l'ancien onglet « Roark » sont convertis (h et f_g;d recalculés par ligne).
 - **Résistance** : f_g;d pour toutes les durées de charge (tableau 25 de FD P78-468 et durées cumulées) et tous
   les traitements (recuit, durci, trempé, trempé chimiquement) ; coefficients γ au choix FD P78-468 (France,
@@ -27,11 +30,10 @@ Firmitas (onglets de calcul, projets dans le navigateur, fiche NDC en PDF ou Wor
   FD P78-468), k_v.
 - **Épaisseur équivalente** : verre feuilleté de n plis, intercalaires d'épaisseurs différentes ; NF EN 16612 annexe D avec ω
   par cas de charge selon FD P78-468 tableau 32 (PVB/EVA, PVB acoustique, gel) ou DTA 6/15-2253_V5 (SentryGlas®,
-  SentryGlas® Xtra™), ou ω saisis ; distances h_m depuis le plan de symétrie du feuilleté (texte normatif) ou le
-  centre de gravité du verre ; méthode EET de l'EN 19100-2 annexe A (η à partir de G et Ψ, ω équivalent).
+  SentryGlas® Xtra™), ou ω saisis ; distances h_m depuis le plan de symétrie du feuilleté (NF EN 16612) ; cas
+  dédoublés verre extérieur / intérieur quand ω dépend de la position dans un vitrage isolant ; méthode EET de l'EN 19100-2 annexe A (η à partir de G et Ψ, ω équivalent).
   Reprise du classeur « Effective Thickness - prEN16612-2017 - LG », conforme à l'annexe D.
 - **Projets** : enregistrement dans le navigateur (localStorage), export / import .json, fiches NDC du projet.
-- **Contre-vérification** : recoupement en direct avec les classeurs d'origine et liste des anomalies relevées.
 
 ## Classeurs d'origine et contre-vérification
 

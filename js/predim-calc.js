@@ -11,7 +11,7 @@
 
   function defaultState() {
     return {
-      v: 2, kind: 'vitrage', name: 'Vitrage V1', cas: 'c1', a: 3000, b: 1500, E: 70000, nu: 0.23, ro: 50, cyl: false, slsCrit: 'fd', igu: false,
+      v: 2, kind: 'vitrage', name: 'Vitrage V1', cas: 'c1', a: 3000, b: 1500, E: 70000, nu: 0.23, ro: 50, cyl: false, slsCrit: 'fd', igu: false, viz: 0,
       // exemple : feuilleté trempé 10/1,52/10, PVB, vent (ω = 0,3) : h_ef;σ = 18,06 mm, h_ef;w = 16,37 mm ; f_g;d = 80 MPa (FD P78-468)
       rows: [
         { name: 'Vent ELU', st: 'uls', load: 'uni', val: 1.8, d: '', beff: '', h: 18.06, f: 80, lim: 100, max: '' },

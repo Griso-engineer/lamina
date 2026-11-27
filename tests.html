@@ -15,11 +15,12 @@
 <p>Moteur comparé aux classeurs d'origine (valeurs non concernées par les corrections), aux formules fermées de la RDM et aux cas limites du feuilleté.</p>
 <div id="sum"></div>
 <div id="out"></div>
-<script src="js/glass.js?v=ed226cb4"></script>
+<script src="js/glass.js?v=800676c3"></script>
 <script src="js/roark-calc.js?v=ef057801"></script>
 <script src="js/audit.js?v=39f44ffb"></script>
-<script src="js/epaisseur-calc.js?v=80e16e8f"></script>
-<script src="js/predim-calc.js?v=13fdf221"></script>
+<script src="js/epaisseur-calc.js?v=d1d346e8"></script>
+<script src="js/plate-ritz.js?v=6fff1ec6"></script>
+<script src="js/predim-calc.js?v=12449c1a"></script>
 <script src="js/resistance-calc.js?v=36ea8f08"></script>
 <script>
 (function () {
@@ -101,9 +102,13 @@
   check('plaque 4 plis : hors domaine de l’annexe A', GL.etaEET(GL.geometry([8, 8, 8, 8], 1.52), 50, psi, 'plate').err ? 1 : 0, 1);
   const E0 = LaminaEpaisseur.compute(LaminaEpaisseur.defaultState());
   check('onglet par défaut (3 × 8 SentryGlas, vent ω = 0,7) = copie OneDrive du classeur', E0.rows.find((r) => r.L.id === 'W').hw, AU.XLE[1].hw, 1e-9);
-  const spv = LaminaEpaisseur.defaultState(); spv.il = 'pvb'; spv.pos = 'int';
+  const spv = LaminaEpaisseur.defaultState(); spv.il = 'pvb';
   const Ep = LaminaEpaisseur.compute(spv);
-  check('FD P78-468 tableau 32, PVB, composant intérieur : ω neige = 0', Ep.rows.find((r) => r.L.id === 'S').w, 0);
+  check('FD P78-468 tableau 32, PVB : ligne neige composant intérieur, ω = 0', Ep.rows.find((r) => r.key === 'S_int').w, 0);
+  check('FD P78-468 tableau 32, PVB : ligne neige extérieur ou simple, ω = 0,2', Ep.rows.find((r) => r.key === 'S_ext').w, 0.2);
+  check('FD P78-468 tableau 32, PVB : hiver dédoublé (0,2 ext. / 0 int.)', Ep.rows.find((r) => r.key === 'H_ext').w + 10 * Ep.rows.find((r) => r.key === 'H_int').w, 0.2);
+  const sgs = LaminaEpaisseur.defaultState(); sgs.eet.load = 'S_int';
+  check('EET SentryGlas, neige composant intérieur : G = 12 MPa (DTA)', LaminaEpaisseur.compute(sgs).eet.G, 12);
   check('FD P78-468 tableau 32, PVB : ω vent = 0,3', Ep.rows.find((r) => r.L.id === 'W').w, 0.3);
   check('DTA SentryGlas Xtra : ω été ≤ 50 °C joint = 0,85', GL.pick(GL.INTERLAYER.sgx.w.Ej, 'ext'), 0.85);
 const pv = LaminaEpaisseur.defaultState(); pv.il = 'pvb';  check('PVB sans G saisi : méthode EET sans résultat (G à saisir)', LaminaEpaisseur.compute(pv).eet.err ? 1 : 0, 1);  pv.eet.G = 0.5; check('PVB avec G = 0,5 MPa saisi : η = G/(G + G*)', LaminaEpaisseur.compute(pv).eet.eta > 0 && LaminaEpaisseur.compute(pv).eet.eta < 1 ? 1 : 0, 1);  const v1e = LaminaEpaisseur.upgrade({ v: 1, il: 'pvb', plies: [{ h: 8 }, { h: 8 }], hints: [1.52], eet: { on: true, cas: 'ss4', a: 1500, b: 3000, gSrc: 'il', load: 'W', G: 50 } });  check('ancien état : G = 50 MPa par défaut vidé', v1e.eet.G === '' ? 1 : 0, 1);
@@ -166,6 +171,21 @@ const pv = LaminaEpaisseur.defaultState(); pv.il = 'pvb';  check('PVB sans G sai
   check('ancien calcul « Roark » : 2 lignes reprises, h = t = 12', up.rows.length === 2 && up.rows[0].h === 12 && up.rows[1].h === 12 ? 1 : 0, 1);
   check('ancien calcul : f_g;d repris avec ses γ (NF EN 16612, vent 3 s, trempé)', up.rows[0].f, Math.round((45 / 1.8 + 75 / 1.2) * 10) / 10);
   check('ancien calcul : critère de flèche saisi conservé (b/150)', PD.compute(up).rows[1].Rd, 10);
+
+  // ------------------------------------------------------------------
+  title('F · Champ de plaque par Ritz (visualisation) comparé à Roark, ν = 0,3, h = 10 mm');
+  const RZ = LaminaRitz, rz = (edges, a, b, N, nu = 0.3) => RZ.solve({ a, b, E: 70000, nu, h: 10, edges, load: 'uni', q: 1e-3, N });
+  const kS = (s, b) => s * 100 / (1e-3 * b * b), kW = (w, b) => w * 70000 * 1000 / (1e-3 * b ** 4);
+  let Z = rz({ bottom: 'ss', top: 'ss', left: 'ss', right: 'ss' }, 3000, 1500, 10);
+  check('4 appuis simples, a/b = 2 : β = 0,6102', kS(Z.at(1500, 750).sy, 1500), 0.6102, 2e-3);
+  check('4 appuis simples, a/b = 2 : α = 0,1110', kW(Z.at(1500, 750).w, 1500), 0.1110, 6e-3);
+  Z = rz({ bottom: 'fx', top: 'fx', left: 'fx', right: 'fx' }, 3000, 1500, 12);
+  check('4 côtés encastrés, a/b = 2 : β₁ = 0,4974 (milieu des grands côtés)', -kS(Z.at(1500, 0).sy, 1500), 0.4974, 5e-3);
+  check('4 côtés encastrés, a/b = 2 : α = 0,0277', kW(Z.at(1500, 750).w, 1500), 0.0277, 1e-2);
+  Z = rz({ bottom: 'ss', top: 'ss', left: 'ss', right: 'fr' }, 1500, 1500, 12);
+  const Zg = Z.grid(30, 30);
+  check('3 appuis simples + bord libre, a/b = 1 : β = 0,67', kS(Zg.sMax.v, 1500), 0.67, 1e-2);
+  check('3 appuis simples + bord libre, a/b = 1 : α = 0,140', kW(Zg.wMax.v, 1500), 0.140, 1e-2);
   document.getElementById('sum').innerHTML = `<p class="${fails ? 'ko' : 'ok'}">${n - fails} / ${n} tests réussis</p>`;
   document.getElementById('out').innerHTML = `<table><thead><tr><th>Test</th><th>Calculé</th><th>Attendu</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
   window.LAMINA_TESTS = { n, fails };
